@@ -10,5 +10,6 @@
   "trapMaxPosition": 1,
   "drawPerCardUsed": 1,
   "monsterFirstRound": 3,
+  "monsterCooldownRounds": 2,
   "monsterSpawnChance": 0.35
 }

@@ -41,6 +41,8 @@ export class Monster {
       attack: this.attack,
       element: this.element,
       attackIn: this.attackIn,
+      reward: this.def.reward,
+      castleAttack: this.def.castleAttack,
     };
   }
 
@@ -78,6 +80,9 @@ export function validateUpgrades(upgrades) {
     if (!UPGRADE_EFFECTS.includes(def.effect)) throw new Error(`${where}: effect は ${UPGRADE_EFFECTS.join(' / ')} のどれかです`);
     for (const key of ['cost', 'amount']) {
       if (!Number.isInteger(def[key]) || def[key] < 1) throw new Error(`${where}: ${key} は1以上の整数にしてください`);
+    }
+    if (def.limit !== undefined && (!Number.isInteger(def.limit) || def.limit < 1)) {
+      throw new Error(`${where}: limit（1試合に買える回数）は1以上の整数にしてください（書かなければ何回でも）`);
     }
   }
 }
