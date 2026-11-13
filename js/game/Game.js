@@ -20,6 +20,7 @@
 
 import { Card, ELEMENTS } from './Card.js';
 import { Monster, validateUpgrades } from './Monster.js';
+import { Pile, validateCastles, validateDecks } from './Setup.js';
 import { Soldier } from './Soldier.js';
 import { Player } from './Player.js';
 import { Road } from './Road.js';
@@ -60,6 +61,9 @@ export const EVENT_TYPES = [
   'coinsChanged',
   'upgradeBought',
   'soldierBuffed',
+  'playerEliminated',
+  'roadClosed',
+  'roadOpened',
   'gameOver',
 ];
 
@@ -83,6 +87,13 @@ const OPTIONAL_RULES = {
   trapMaxPosition: 1, // トラップを置ける、自分の城から数えた位置の上限
   drawPerCardUsed: 0, // 次のターンに引く枚数 = max(drawPerTurn, 使った枚数 × これ)
   monsterFirstRound: 3, // 魔物が出はじめる周回
+  maxRounds: 0, // 周回の上限（0 なら上限なし）
+};
+/** 文字列で選ぶ項目と、選べる値（最初の値が省略したときの値） */
+const CHOICE_RULES = {
+  winCondition: ['firstDestroy', 'lastStanding'],
+  castleSpellRange: ['any', 'neighbors'],
+  deckMode: ['shared', 'own'],
 };
 /** 0以上1以下の数（整数でなくてよい）の省略できる項目 */
 const OPTIONAL_RATE_RULES = {
@@ -100,18 +111,31 @@ export class Game {
    * @param {() => number} [options.rng] 0以上1未満を返す乱数。省略すると Math.random
    * @param {object} [options.monsters] data/monsters.json の中身。省略すると魔物は出ない
    * @param {object} [options.upgrades] data/upgrades.json の中身。省略すると強化は買えない
+   * @param {object} [options.castles] data/castles.json の中身。省略すると城の種類なし
+   * @param {object} [options.decks] data/decks.json の中身（deckMode "own" のときに使う）
+   * @param {{castles?: string[], decks?: string[]}} [options.setup] 席ごとの城の種類・デッキ
    */
-  constructor({ cards, rules, rng = Math.random, monsters = null, upgrades = null } = {}) {
+  constructor({ cards, rules, rng = Math.random, monsters = null, upgrades = null, castles = null, decks = null, setup = {} } = {}) {
     Card.validateDefinitions(cards);
     Game.validateRules(rules);
     if (typeof rng !== 'function') throw new Error('rng は 0以上1未満の数を返す関数にしてください');
     if (monsters !== null) Monster.validateDefinitions(monsters, ELEMENTS);
     if (upgrades !== null) validateUpgrades(upgrades);
+    if (castles !== null) validateCastles(castles);
+    if (decks !== null) validateDecks(decks, cards);
 
     this.cardDefs = cards;
     this.monsterDefs = monsters;
     this.upgradeDefs = upgrades || {};
-    this.rules = { ...OPTIONAL_RULES, ...OPTIONAL_RATE_RULES, ...rules };
+    this.rules = {
+      ...OPTIONAL_RULES,
+      ...OPTIONAL_RATE_RULES,
+      ...Object.fromEntries(Object.entries(CHOICE_RULES).map(([k, v]) => [k, v[0]])),
+      playerCount: 2,
+      ...rules,
+    };
+    this.castleDefs = castles;
+    this.deckDefs = decks;
     this.rng = rng;
 
     this.nextCardNumber = 1;
@@ -125,24 +149,44 @@ export class Game {
     this.listeners = new Map(EVENT_TYPES.map((type) => [type, new Set()]));
 
     /** 席順（手番の順） */
-    this.playerOrder = [...PLAYER_IDS];
+    const n = this.rules.playerCount;
+    this.playerOrder = Array.from({ length: n }, (_, i) => `p${i + 1}`);
     this.players = {};
-    // 後攻（p2）は城HPが secondPlayerCastleBonus だけ多い状態で始まる（上限も同じだけ高い）。先攻有利をやわらげるため
+    const castleTypes = this.resolveSetupList(setup.castles, castles, this.rules.defaultCastle, '城の種類', 'castles');
     this.playerOrder.forEach((id, seat) => {
-      // 2人用のボーナス。3人以上の席ごとのボーナスは STEP 5 で決める（seatCastleBonus）
-      const bonus = this.playerOrder.length === 2 && seat === 1 ? this.rules.secondPlayerCastleBonus : 0;
-      this.players[id] = new Player(id, this.rules.castleMaxHp + bonus, this.rules.drawPerTurn);
+      // 後ろの席ほど城HPが少し多い（先攻有利をやわらげるため）
+      const castleType = castleTypes ? castleTypes[seat] : null;
+      const cdef = castleType ? castles[castleType] : {};
+      const maxHp = Math.max(1, this.rules.castleMaxHp + this.seatBonus(seat) + (cdef.hpBonus ?? 0));
+      const player = new Player(id, maxHp, this.rules.drawPerTurn);
+      player.castleType = castleType;
+      player.castleDef = cdef;
+      player.maxHand = Math.max(0, this.rules.maxHand + (cdef.maxHandBonus ?? 0));
+      this.players[id] = player;
     });
     /** @type {Road[]} */
     this.roads = [];
     this.rebuildRoads();
 
-    /** 山札。先頭（index 0）から引く */
+    // 山札：deckMode "shared" は全員で1組、"own" は1人1組（data/decks.json のデッキ）
     // カードIDはシャッフルしたあとの順に振る（IDから種類が分からないように）
-    this.deck = this.shuffle(this.buildDeckTypes()).map((type) => this.createCard(type));
-    this.discardPile = [];
-    /** 使い切りのカード（cards.json で exhaust: true）は、使ったらここへ行き、山札には戻らない */
-    this.exhaustedPile = [];
+    /** @type {Map<string, Pile>} プレイヤーID → その人が使う山札 */
+    this.piles = new Map();
+    if (this.rules.deckMode === 'own') {
+      const deckIds = this.resolveSetupList(setup.decks, decks, this.rules.defaultDeck, 'デッキ', 'decks');
+      if (!deckIds) throw new Error('deckMode が "own" のときは decks（data/decks.json）を渡してください');
+      this.playerOrder.forEach((id, seat) => {
+        const pile = new Pile(id);
+        const types = Object.entries(decks[deckIds[seat]].cards).flatMap(([t, k]) => Array(k).fill(t));
+        pile.deck = this.shuffle(types).map((type) => this.createCard(type));
+        this.players[id].deckId = deckIds[seat];
+        this.piles.set(id, pile);
+      });
+    } else {
+      const pile = new Pile(null);
+      pile.deck = this.shuffle(this.buildDeckTypes()).map((type) => this.createCard(type));
+      for (const id of this.playerOrder) this.piles.set(id, pile);
+    }
 
     this.turn = 0;
     this.currentPlayer = this.playerOrder[0];
@@ -152,12 +196,42 @@ export class Game {
 
     // 初期手札（ゲーム開始前なのでイベントは出さない）
     for (const id of this.playerOrder) {
+      const pile = this.piles.get(id);
       for (let i = 0; i < this.rules.initialHand; i++) {
-        const card = this.deck.shift();
+        const card = pile.deck.shift();
         if (!card) break;
         this.players[id].hand.push(card);
       }
     }
+  }
+
+  /** 席ごとの城ボーナス */
+  seatBonus(seat) {
+    const n = this.rules.playerCount;
+    if (this.rules.seatCastleBonus) return this.rules.seatCastleBonus[seat];
+    if (n === 2) return seat === 1 ? this.rules.secondPlayerCastleBonus : 0;
+    return Math.round((this.rules.secondPlayerCastleBonus * seat) / (n - 1));
+  }
+
+  /** setup.castles / setup.decks を席ごとの配列にする（defs がなければ null）。間違いは例外 */
+  resolveSetupList(list, defs, fallback, label, key) {
+    if (!defs) {
+      if (list !== undefined) throw new Error(`setup.${key} を使うときは ${key}（data/${key}.json）も渡してください`);
+      return null;
+    }
+    const n = this.rules.playerCount;
+    const first = fallback ?? Object.keys(defs)[0];
+    const result = list === undefined ? Array(n).fill(first) : list;
+    if (!Array.isArray(result) || result.length !== n) throw new Error(`setup.${key} は人数ぶん（${n}個）の配列にしてください`);
+    for (const id of result) {
+      if (!Object.hasOwn(defs, id)) throw new Error(`setup.${key}：「${id}」という${label}はありません`);
+    }
+    return result;
+  }
+
+  /** その人が使う山札 */
+  pileOf(playerId) {
+    return this.piles.get(playerId);
   }
 
   static validateRules(rules) {
@@ -167,6 +241,19 @@ export class Game {
       if (v !== undefined && (!Number.isInteger(v) || v < 0)) {
         throw new Error(`rules.json の ${key} は 0 以上の整数にしてください（書かなければ ${OPTIONAL_RULES[key]}）`);
       }
+    }
+    for (const [key, values] of Object.entries(CHOICE_RULES)) {
+      if (rules[key] !== undefined && !values.includes(rules[key])) {
+        throw new Error(`rules.json の ${key} は ${values.map((v) => `"${v}"`).join(' / ')} のどれかにしてください`);
+      }
+    }
+    if (rules.playerCount !== undefined && (!Number.isInteger(rules.playerCount) || rules.playerCount < 2 || rules.playerCount > 8)) {
+      throw new Error('rules.json の playerCount は 2〜8 の整数にしてください');
+    }
+    if (rules.seatCastleBonus !== undefined
+      && (!Array.isArray(rules.seatCastleBonus) || !rules.seatCastleBonus.every((v) => Number.isInteger(v) && v >= 0)
+        || rules.seatCastleBonus.length < (rules.playerCount ?? 2))) {
+      throw new Error('rules.json の seatCastleBonus は、人数ぶん以上の0以上の整数の配列にしてください');
     }
     for (const key of Object.keys(OPTIONAL_RATE_RULES)) {
       const v = rules[key];
@@ -242,14 +329,15 @@ export class Game {
   /** count 枚引く。山札が尽きたら捨て札をシャッフルし直す。両方空なら引けたぶんだけ */
   drawCards(player, count) {
     const cardIds = [];
+    const pile = this.pileOf(player.id);
     for (let i = 0; i < count; i++) {
-      if (this.deck.length === 0) {
-        if (this.discardPile.length === 0) break;
-        this.deck = this.shuffle(this.discardPile);
-        this.discardPile = [];
-        this.emit('deckShuffled', { deckCount: this.deck.length });
+      if (pile.deck.length === 0) {
+        if (pile.discard.length === 0) break;
+        pile.deck = this.shuffle(pile.discard);
+        pile.discard = [];
+        this.emit('deckShuffled', { deckCount: pile.deck.length, playerId: pile.owner });
       }
-      const card = this.deck.shift();
+      const card = pile.deck.shift();
       player.hand.push(card);
       cardIds.push(card.cardId);
     }
@@ -628,7 +716,8 @@ export class Game {
     const player = this.players[this.currentPlayer];
     if (player.coins < def.cost) return fail(`コインが足りません（あと${def.cost - player.coins}枚）`);
     if (def.effect === 'repairCastle' && player.castle.isFull) return fail('城のHPが満タンです');
-    if (def.effect === 'drawCards' && this.deck.length + this.discardPile.length === 0) return fail('山札も捨て札もありません');
+    const pile = this.pileOf(player.id);
+    if (def.effect === 'drawCards' && pile.deck.length + pile.discard.length === 0) return fail('山札も捨て札もありません');
     if (def.effect === 'sharpenSoldiers' && player.soldiers.length === 0) return fail('道の上に自分の兵士がいません');
     return ok();
   }
@@ -726,7 +815,10 @@ export class Game {
     switch (def.effect) {
       case 'damageEnemyCastle':
         return {
-          targets: [...playerTargets(this.opponentsOf(player.id)), ...this.monsters.map((m) => ({ monsterId: m.monsterId }))],
+          targets: [
+            ...playerTargets(this.rules.castleSpellRange === 'neighbors' ? this.neighborsOf(player.id) : this.opponentsOf(player.id)),
+            ...this.monsters.map((m) => ({ monsterId: m.monsterId })),
+          ],
           reason: '相手がいません',
         };
       case 'damageEnemySoldiers':
@@ -837,8 +929,8 @@ export class Game {
     if (card.slot === 'main') player.playedThisTurn = true;
     player.cardsPlayedThisTurn += 1;
     // 使ったカードは（兵士も）すぐ捨て札へ。使い切りのカードは、二度と山札に戻らない置き場へ
-    if (card.isExhaust) this.exhaustedPile.push(card);
-    else this.discardPile.push(card);
+    if (card.isExhaust) this.pileOf(player.id).exhausted.push(card);
+    else this.pileOf(player.id).discard.push(card);
     // トラップは種類を伏せる（相手に見えないように）
     this.emit('cardPlayed', { playerId: player.id, cardId: card.cardId, type: card.kind === 'trap' ? null : card.type });
     // 次のターンに引く枚数は、出すたびに決め直す（UI がターン中に表示できるように）
@@ -849,6 +941,7 @@ export class Game {
       const road = this.roadBetween(player.id, targetId);
       const soldierId = `s${String(this.nextSoldierNumber++).padStart(2, '0')}`;
       const soldier = new Soldier(soldierId, card, road.roadId, targetId);
+      soldier.baseAttack += player.castleDef.soldierAttackBonus ?? 0; // 兵舎
       player.soldiers.push(soldier);
       this.emit('soldierDeployed', {
         playerId: player.id,
@@ -882,7 +975,8 @@ export class Game {
     switch (effect) {
       case 'damageEnemyCastle':
         this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id });
-        this.damageCastle(enemy, amount, { kind: 'spell', type: card.type });
+        // 魔法の塔は城への魔法が強い
+        this.damageCastle(enemy, amount + (player.castleDef.castleSpellBonus ?? 0), { kind: 'spell', type: card.type });
         break;
 
       case 'damageEnemySoldiers':
@@ -959,7 +1053,7 @@ export class Game {
     if (this.phase === 'discard') return fail('先に手札を捨ててください');
 
     const player = this.players[this.currentPlayer];
-    const over = player.hand.length - this.rules.maxHand;
+    const over = player.hand.length - player.maxHand;
     if (over > 0) {
       this.phase = 'discard';
       this.discardCount = over;
@@ -985,7 +1079,7 @@ export class Game {
     const player = this.players[this.currentPlayer];
     if (!cardIds.every((id) => player.findInHand(id))) return fail('手札にないカードが選ばれています');
 
-    for (const id of cardIds) this.discardPile.push(player.takeFromHand(id));
+    for (const id of cardIds) this.pileOf(player.id).discard.push(player.takeFromHand(id));
     this.discardCount = 0;
     this.emit('cardDiscarded', { playerId: player.id, cardIds: [...cardIds] });
     this.passTurn();
