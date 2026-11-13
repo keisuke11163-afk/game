@@ -70,7 +70,8 @@
     "kind": "defense",
     "effect": "armorCastle",
     "amount": 5,
-    "count": 3
+    "count": 3,
+    "exhaust": true
   },
   "pit": {
     "name": "落とし穴",
@@ -84,7 +85,7 @@
     "kind": "spell",
     "effect": "poisonEnemySoldiers",
     "amount": 1,
-    "turns": 3,
+    "turns": 4,
     "count": 3
   },
   "frostBreath": {

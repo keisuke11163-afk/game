@@ -93,6 +93,9 @@ export class Card {
       if (def.exhaust !== undefined && typeof def.exhaust !== 'boolean') {
         throw new Error(`${where}: exhaust は true か false にしてください（書かなければ false）`);
       }
+      if (def.element !== undefined && def.kind !== 'weapon') {
+        throw new Error(`${where}: element を書けるのは武器（kind: "weapon"）だけです`);
+      }
       if (def.element !== undefined && def.element !== null && !ELEMENTS.includes(def.element)) {
         throw new Error(`${where}: element は ${ELEMENTS.join(' / ')} のどれかにしてください（書かなければ属性なし）`);
       }

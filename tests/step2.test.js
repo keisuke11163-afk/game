@@ -49,7 +49,7 @@ test('ドロー：次のターンは max(drawPerTurn, 使った枚数)。0枚で
   play(game, 'infantry');
   play(game, 'wall');
   play(game, 'pit', { roadId: 'p1-p2', square: 0 });
-  assert.equal(game.getState('p1').players.p1.drawNextTurn, 1); // まだターンを終えていない
+  assert.equal(game.getState('p1').players.p1.drawNextTurn, 3); // 出すたびに決め直す
   game.endTurn();
   assert.equal(game.getState('p1').players.p1.drawNextTurn, 3);
   game.endTurn(); // p2 は何も出さない
@@ -99,7 +99,7 @@ test('盾：ダメージを先に受ける。重なる。blocked に入る', () 
 test('城壁：ダメージを先に受け、次の自分のターンの始めに消える。強くないと出せない', () => {
   const { game, log } = setup({ p1: ['wall', 'wall'], p2: ['fireball'] });
   play(game, 'wall');
-  assert.equal(game.canPlayCard(idOf(game, 'wall')).reason, 'もっと強い城壁があります');
+  assert.equal(game.canPlayCard(idOf(game, 'wall')).reason, '同じか、より強い城壁がもう置いてあります');
   game.endTurn();
   play(game, 'fireball');
   const c = log.at(-1);
@@ -152,7 +152,7 @@ test('毒：持ち主の進軍の前にダメージ。回数が終わったら s
   play(game, 'infantry');
   game.endTurn();
   play(game, 'poisonMist');
-  assert.deepEqual(log.at(-1), { event: 'statusApplied', playerId: 'p1', soldierId: 's01', status: 'poison', turns: 3 });
+  assert.deepEqual(log.at(-1), { event: 'statusApplied', playerId: 'p1', soldierId: 's01', status: 'poison', turns: 4 });
   game.endTurn();
   const i = log.findLastIndex((e) => e.event === 'turnStarted');
   const seq = log.slice(i).filter((e) => e.event !== 'cardDrawn');
@@ -160,8 +160,8 @@ test('毒：持ち主の進軍の前にダメージ。回数が終わったら s
   assert.deepEqual([seq[1].cause, seq[1].amount, seq[1].hp], ['poison', 1, 4]);
   assert.equal(seq[2].event, 'soldierMoved'); // 毒のあとに動く
   game.endTurn();
-  play(game, 'poisonMist'); // 残り2回 → 3回にそろう（増えない）
-  assert.deepEqual(soldiers(game, 'p1')[0].statuses.poison, { amount: 1, turns: 3 });
+  play(game, 'poisonMist'); // 残り3回 → 4回にそろう（増えない）
+  assert.deepEqual(soldiers(game, 'p1')[0].statuses.poison, { amount: 1, turns: 4 });
 });
 
 test('毒で HP が0になった兵士は消え、動かない', () => {
@@ -202,4 +202,71 @@ test('cards.json の間違いは例外', () => {
   assert.throws(() => new Game({ cards: { ...cards, x: { name: 'x', kind: 'weapon', attackBonus: 1, element: 'ice', count: 1 } }, rules }), /element/);
   assert.throws(() => new Game({ cards: { ...cards, x: { name: 'x', kind: 'trap', effect: 'boom', count: 1 } }, rules }), /effect/);
   assert.throws(() => new Game({ cards, rules: { ...rules, elementBonus: -1 } }), /elementBonus/);
+});
+
+test('トラップを出したときの cardPlayed は type が null（相手に種類が見えない）', () => {
+  const { game, log } = setup({ p1: ['pit'] });
+  play(game, 'pit', { roadId: 'p1-p2', square: 0 });
+  const played = log.find((e) => e.event === 'cardPlayed');
+  assert.equal(played.type, null);
+  assert.ok(!JSON.stringify(log.filter((e) => e.event !== 'trapTriggered')).includes('"pit"'));
+});
+
+test('同じ武器をもう一度は持たせられない。全員もう凍結していたら氷の息は出せない', () => {
+  const { game } = setup({ p1: ['infantry', 'flameSword', 'flameSword'], p2: ['frostBreath'] });
+  play(game, 'infantry');
+  play(game, 'flameSword');
+  assert.equal(game.canPlayCard(idOf(game, 'flameSword')).reason, 'もう同じ武器を持っています');
+  game.endTurn();
+  game.players.p1.soldiers[0].frozen = 1;
+  assert.equal(game.canPlayCard(idOf(game, 'frostBreath')).reason, 'もう同じ状態になっています');
+  game.players.p1.soldiers[0].frozen = 0;
+  assert.equal(game.canPlayCard(idOf(game, 'frostBreath')).ok, true);
+});
+
+test('トラップは戦いより先：すぐ先に相手がいても、落とし穴で止まって戦わない', () => {
+  const { game, log } = setup({ p1: ['pit', 'infantry'], p2: ['knight'] });
+  play(game, 'pit', { roadId: 'p1-p2', square: 1 });
+  game.endTurn();
+  play(game, 'knight'); // 道のマス4
+  game.endTurn();
+  play(game, 'infantry'); // 道のマス0
+  game.endTurn(); // 騎士：4→3→2→1（落とし穴）。マス0の歩兵は1つ先だが、トラップが先
+  const i = log.findIndex((e) => e.event === 'trapTriggered');
+  assert.ok(i > 0);
+  assert.ok(!log.slice(i, i + 4).some((e) => e.event === 'soldiersClashed'));
+});
+
+test('落とし穴で HP が0になったら消える。毒の最後の1回で消えるときは statusCleared を出さない', () => {
+  const { game, log } = setup({ p1: ['pit', 'pit'], p2: ['knight', 'thunder'], rules: {} });
+  play(game, 'pit', { roadId: 'p1-p2', square: 1 });
+  game.endTurn();
+  play(game, 'knight');
+  game.endTurn(); game.endTurn(); // 騎士 0→3 = 道のマス1 で落とし穴（HP4 → 1）
+  const dmg = log.find((e) => e.event === 'soldierDamaged' && e.cause === 'trap');
+  assert.equal(dmg.hp, 1);
+  // 毒：HP1 の兵士に毒 → 次の進軍の前に消える。statusCleared は出ない
+  game.players.p2.soldiers[0].poison = { amount: 1, turns: 1 };
+  game.endTurn(); game.endTurn();
+  const k = log.findLastIndex((e) => e.event === 'soldierDestroyed');
+  assert.equal(log[k - 1].cause, 'poison');
+  assert.ok(!log.some((e) => e.event === 'statusCleared'));
+});
+
+test('属性：火は木に強く、木は水に強い。城へのダメージには属性が乗らない', () => {
+  const { game } = setup();
+  const fire = { attack: 3, element: 'fire' };
+  const wood = { attack: 3, element: 'wood' };
+  const water = { attack: 3, element: 'water' };
+  assert.equal(game.fightDamage(fire, wood), 5);
+  assert.equal(game.fightDamage(wood, water), 5);
+  assert.equal(game.fightDamage(wood, fire), 3);
+  assert.equal(game.fightDamage(fire, { attack: 3, element: null }), 3);
+});
+
+test('rules / cards の間違い：trapMaxPosition が真ん中以上、兵士に element', () => {
+  const cards = loadFixture('cards-step2.json');
+  const rules = loadFixture('rules.json');
+  assert.throws(() => new Game({ cards, rules: { ...rules, trapMaxPosition: 2 } }), /trapMaxPosition/);
+  assert.throws(() => new Game({ cards: { ...cards, infantry: { ...cards.infantry, element: 'fire' } }, rules }), /element/);
 });
