@@ -114,14 +114,31 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 
 | メソッド | 説明 |
 |---|---|
+| `new Game({ cards, rules, rng })` | ゲームを作る。`cards` / `rules` は `data/` の JSON の中身（Game はファイルを読まない）。`rng` は 0以上1未満を返す乱数で、省略すると `Math.random`。作った時点で初期手札は配られていて、`phase` は `"ready"`。イベントは出さない |
+| `game.start()` | ゲームを始める。全イベントを `on()` で購読してから呼ぶと、p1 のターン1が始まる（`turnStarted` → 進軍） |
 | `game.getState(viewerId)` | 今の状態をただのオブジェクトで返す。`viewerId` の手札は中身まで、相手の手札は枚数だけ入る |
+| `game.canPlayCard(cardId)` | そのカードを今出せるかを返す（読むだけで、状態は変わらない）。出せないときは `{ ok: false, reason }`。`playCard` と同じ判定なので、UIは出せない理由を前もって表示できる |
 | `game.playCard(cardId, target)` | カードを使う。STEP 1 では対象が自動で決まるので `target` は省略してよい（将来の魔物や対象選択のために残す） |
-| `game.discard(cardIds)` | 手札を捨てる。`phase` が `"discard"` のときだけ使える |
+| `game.discard(cardIds)` | 手札を捨てる。`phase` が `"discard"` のときだけ使える。捨てる必要がある枚数ちょうどを1回で渡す（多い・少ない・重複・手札にないカードは `{ ok: false }`）。捨て終わったら、自動で次の人のターンが始まる（`endTurn()` を呼び直さない） |
 | `game.endTurn()` | ターンを終える。手札が上限を超えていたら `phase` が `"discard"` になり、捨て終わるまで次の人の番にならない |
-| `game.on(type, handler)` / `game.off(type, handler)` | イベントの購読と解除。`handler` はペイロードのオブジェクトを1つ受け取る |
+| `game.on(type, handler)` / `game.off(type, handler)` | イベントの購読と解除。`handler` はペイロードのオブジェクトを1つ受け取る。表にない `type` を渡すと `{ ok: false }` |
 
-- 操作が許されないとき（自分の番でない、1ターンに2枚目を出した、など）は例外を投げず、`{ ok: false, reason: "..." }` を返す。成功したら `{ ok: true }`
+- 操作が許されないとき（自分の番でない、1ターンに2枚目を出した、など）は例外を投げず、`{ ok: false, reason: "..." }` を返す。成功したら `{ ok: true }`。`reason` はそのまま画面に出せる日本語の文
+- `cards` / `rules` の中身が間違っているときだけは、`new Game()` が例外を投げる（どこが悪いかを書いた Error）
 - イベントは操作の中で同期的に、起きた順に発行される。UIはキューにためて順番にアニメーションする
+- `handler` の中で例外が出ても、Game は `console.error` に出して処理を続ける（ゲームの状態が途中で止まらないように）
+
+#### デバッグ用（`?debug=1` のときだけ使う）
+
+| メソッド | 説明 |
+|---|---|
+| `game.debugSetCastleHp(playerId, hp)` | 城HPを変える（1〜上限の整数）。`phase` が `"gameOver"` のときは使えない |
+| `game.debugSetHand(playerId, types)` | 手札をカード種類の並びで作り直す（例：`["infantry", "fireball"]`）。カードIDは新しく振り、元の手札はゲームから消える。`phase` が `"discard"` のときは使えない |
+| `game.debugSetDeck(types)` | 山札をカード種類の並びで作り直す。配列の先頭から順に引かれる。カードIDは新しく振り、元の山札はゲームから消える |
+
+- どれも `{ ok: true }` か `{ ok: false, reason }` を返す。イベントは出さないので、呼んだあとは `getState()` を読み直して描き直す
+- `start()` の前に呼べば、開始時の状態を作れる
+- 山札の順番を毎回同じにしたいときは、`new Game()` にシード付きの `rng` を渡す
 
 ### getState() の形
 
@@ -129,7 +146,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 {
   turn: 3,                     // 通算ターン数（1から）
   currentPlayer: "p1",
-  phase: "main",               // "main" | "discard" | "gameOver"
+  phase: "main",               // "ready"（start() の前）| "main" | "discard" | "gameOver"
   winner: null,                // 決着したら "p1" か "p2"
   deckCount: 18,
   discardCount: 5,
@@ -146,6 +163,9 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 }
 ```
 
+- `getState(null)` のように、どちらのプレイヤーIDでもない値を渡すと、両方の `hand` が `null` になる（手番交代の目隠し中などに使う）
+- `turn` は `start()` の前は 0
+
 ### Gameが出すイベント
 
 UIはこれを受けてアニメーションする。イベントを増やすときは、この表に追記する。
@@ -158,16 +178,29 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `cardPlayed` | `{ playerId, cardId, type }` |
 | `discardRequired` | `{ playerId, count }` … 捨てる必要がある枚数 |
 | `cardDiscarded` | `{ playerId, cardIds }` |
-| `soldierDeployed` | `{ playerId, soldierId, type, position }` |
+| `soldierDeployed` | `{ playerId, soldierId, type, position, hp, attack }` … `hp` / `attack` は出した時点の値 |
 | `soldierMoved` | `{ playerId, soldierId, from, to }` |
 | `soldierDamaged` | `{ playerId, soldierId, amount, hp }` |
 | `soldierDestroyed` | `{ playerId, soldierId, reason }` … `reason` は `"killed"` か `"reachedCastle"` |
-| `spellCast` | `{ playerId, type, target }` |
-| `castleDamaged` | `{ playerId, amount, hp, source }` … `playerId` は城の持ち主。`source` は `{ kind: "soldier", soldierId }` か `{ kind: "spell", type }` |
-| `castleHealed` | `{ playerId, amount, hp }` |
+| `spellCast` | `{ playerId, type, target }` … `target` は効果を受けるプレイヤーID（ファイアボール・サンダーは相手、ヒールは自分） |
+| `castleDamaged` | `{ playerId, amount, hp, source }` … `playerId` は城の持ち主。`amount` は攻撃力・魔法の値そのまま（`hp` は0未満にならない）。`source` は `{ kind: "soldier", soldierId }` か `{ kind: "spell", type }` |
+| `castleHealed` | `{ playerId, amount, hp }` … `amount` は実際に増えた量（上限で止まったぶんは含まない） |
 | `gameOver` | `{ winner }` |
 
-兵士が城に着いたときは `soldierMoved` → `castleDamaged` → `soldierDestroyed` の順に出す。
+#### イベントの順番
+
+- ターンの始め：`turnStarted` → ドロー → 進軍
+  - ドロー：山札が途中で尽きたら `deckShuffled` → 残りを引く。`cardDrawn` は引いたぶんを1回にまとめて出す。1枚も引かなければ `cardDrawn` は出さない
+  - 進軍：兵士は出した順に1体ずつ動く。城に着いた兵士は `soldierMoved` → `castleDamaged` → `soldierDestroyed`（`"reachedCastle"`）の順に出す
+  - 城に着いた兵士の `soldierMoved.to` は `laneLength` にそろえる（6以上に進んでも 6）
+  - 進軍の途中で城HPが0以下になったら、残りの兵士は動かさずにすぐ `gameOver` を出す
+- カードを出したとき：`cardPlayed` のあと
+  - 兵士：`soldierDeployed`
+  - ファイアボール：`spellCast` → `castleDamaged`
+  - サンダー：`spellCast` → 相手の兵士1体ずつ `soldierDamaged` →（HPが0なら）`soldierDestroyed`（`"killed"`）
+  - ヒール：`spellCast` → `castleHealed`
+- ターン終了：手札が上限を超えていたら `discardRequired`。捨てたら `cardDiscarded` → 次の人の `turnStarted` …
+- `gameOver` はいちばん最後に1回だけ出る。そのあとの操作はすべて `{ ok: false }`
 
 ### データの形
 
@@ -196,12 +229,15 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 }
 ```
 
+- カードの説明文は UI が `kind` / `effect` と数値から組み立てる。カードに `description` を書けば、そちらを優先する（Game は `description` を使わない）
+
 ## ゲームのルール（現在：STEP 1）
 
 STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて仮（`data/` で調整する）。
 
 - 城HP：100（上限も100）
 - 山札：2人共通。シャッフルして使う。使ったカードと捨てたカードは捨て札置き場へ
+  - 兵士カードも、出した時点で捨て札置き場へ行く（場の兵士とは別に扱う）
 - 山札が尽きたら、捨て札をシャッフルして新しい山札にする。両方とも空なら引かない
 - 初期手札：6枚ずつ
 - 先攻は p1。先攻の最初のターンだけはドローしない
@@ -209,7 +245,9 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
   1. ドロー：2枚引く
   2. 進軍：自分の兵士が全員前に進む。相手の城に着いた兵士は、攻撃力ぶんのダメージを与えて消える
   3. メイン：カードを1枚出す（出さなくてもよい）
+     - 出しても何も起きないカードは出せない（相手のレーンに兵士がいないときのサンダー、城HPが満タンのときのヒール）
   4. ターン終了：手札が8枚を超えていたら、本人が選んで8枚になるまで捨てる
+     - 捨てる枚数ちょうどを一度に選ぶ。捨て終わったら、そのまま次の人のターンになる
 - レーン：城と城の間は6マス。自分の兵士は自分のレーンを進む
   - 出した兵士は位置0（自分の城の前）に置かれ、出したターンには動かない
   - 進軍で位置が6以上になったら「相手の城に着いた」とする（ぴったりでなくてよい）
