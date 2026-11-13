@@ -157,7 +157,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 
 | メソッド | 説明 |
 |---|---|
-| `game.debugSetCastleHp(playerId, hp)` | 城HPを変える（1〜上限の整数）。`phase` が `"gameOver"` のときは使えない |
+| `game.debugSetCastleHp(playerId, hp)` | 城HPを変える（1〜その城の上限の整数。後攻の城は上限が高い）。`phase` が `"gameOver"` のときは使えない |
 | `game.debugSetHand(playerId, types)` | 手札をカード種類の並びで作り直す（例：`["infantry", "fireball"]`）。カードIDは新しく振り、元の手札はゲームから消える。`phase` が `"discard"` のときは使えない |
 | `game.debugSetDeck(types)` | 山札をカード種類の並びで作り直す。配列の先頭から順に引かれる。カードIDは新しく振り、元の山札はゲームから消える |
 
@@ -175,13 +175,15 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
   winner: null,                // 決着したら "p1" か "p2"
   deckCount: 18,
   discardCount: 5,
+  exhaustedCount: 1,           // 使い切り置き場の枚数（使い切りのカードを使うとここへ行き、山札に戻らない）
   players: {
     p1: {
-      castleHp: 92,
+      castleHp: 22,
+      castleMaxHp: 25,         // その城の上限。後攻（p2）は castleMaxHp + secondPlayerCastleBonus
       hand: [{ cardId: "c07", type: "infantry" }],  // viewer 本人のみ。相手は null
       handCount: 7,
       playedThisTurn: false,
-      soldiers: [{ soldierId: "s03", type: "knight", hp: 5, attack: 5, position: 3 }]
+      soldiers: [{ soldierId: "s03", type: "knight", hp: 4, attack: 5, position: 3 }]
     },
     p2: { /* 同じ形 */ }
   }
@@ -240,10 +242,11 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 
 ```json
 {
-  "castleMaxHp": 100,
-  "initialHand": 6,
-  "drawPerTurn": 2,
-  "firstTurnDraw": 0,
+  "castleMaxHp": 25,
+  "secondPlayerCastleBonus": 2,
+  "initialHand": 5,
+  "drawPerTurn": 1,
+  "firstTurnDraw": 1,
   "maxHand": 8,
   "laneLength": 5
 }
@@ -253,28 +256,32 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 
 ```json
 {
-  "infantry":  { "name": "歩兵", "kind": "soldier", "hp": 3, "attack": 3, "speed": 2, "count": 10 },
-  "knight":    { "name": "騎士", "kind": "soldier", "hp": 5, "attack": 5, "speed": 3, "count": 6 },
+  "infantry":  { "name": "歩兵", "kind": "soldier", "hp": 5, "attack": 3, "speed": 2, "count": 10 },
+  "knight":    { "name": "騎士", "kind": "soldier", "hp": 4, "attack": 5, "speed": 3, "count": 6 },
   "fireball":  { "name": "ファイアボール", "kind": "spell", "effect": "damageEnemyCastle", "amount": 8, "count": 6 },
   "thunder":   { "name": "サンダー", "kind": "spell", "effect": "damageEnemySoldiers", "amount": 3, "count": 6 },
-  "heal":      { "name": "ヒール", "kind": "spell", "effect": "healOwnCastle", "amount": 10, "count": 6 }
+  "heal":      { "name": "ヒール", "kind": "spell", "effect": "healOwnCastle", "amount": 10, "count": 6, "exhaust": true }
 }
 ```
 
+- `secondPlayerCastleBonus`：後攻（p2）の城だけ、HPと上限がこのぶん多い（先攻有利をやわらげるため）。0以上の整数
+- `firstTurnDraw`：先攻の最初のターンに引く枚数（2ターン目以降と後攻は `drawPerTurn`）
+- `exhaust`：`true` のカードは使い切り。使うと使い切り置き場へ行き、山札に戻らない。省略すると `false`。手札の上限で捨てたときは、ふつうに捨て札置き場へ行く（山札に戻る）
 - カードの説明文は UI が `kind` / `effect` と数値から組み立てる。カードに `description` を書けば、そちらを優先する（Game は `description` を使わない）
 
 ## ゲームのルール（現在：STEP 1）
 
 STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて仮（`data/` で調整する）。
 
-- 城HP：100（上限も100）
+- 城HP：25（上限も25）。後攻（p2）の城は 27 で始まる（上限も27）
 - 山札：2人共通。シャッフルして使う。使ったカードと捨てたカードは捨て札置き場へ
   - 兵士カードも、出した時点で捨て札置き場へ行く（場の兵士とは別に扱う）
+  - 使い切りのカード（ヒール）は、使ったら使い切り置き場へ行き、二度と山札に戻らない。手札の上限で捨てたときは捨て札置き場へ行く（山札に戻る）
 - 山札が尽きたら、捨て札をシャッフルして新しい山札にする。両方とも空なら引かない
-- 初期手札：6枚ずつ
-- 先攻は p1。先攻の最初のターンだけはドローしない
+- 初期手札：5枚ずつ
+- 先攻は p1。先攻の最初のターンも1枚引く
 - ターンの流れ
-  1. ドロー：2枚引く
+  1. ドロー：1枚引く
   2. 進軍：自分の兵士が出した順に1体ずつ前に進む。相手の兵士とぶつかったら戦う。相手の城に着いた兵士は、攻撃力ぶんのダメージを与えて消える
   3. メイン：カードを1枚出す（出さなくてもよい）
      - 出しても何も起きないカードは出せない（道の上に相手の兵士がいないときのサンダー、城HPが満タンのときのヒール）
@@ -301,11 +308,11 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 
 | 名前 | 種類 | 効果 | 枚数 |
 |---|---|---|---|
-| 歩兵 | 兵士 | HP3・攻撃3・1ターンに2マス進む | 10 |
-| 騎士 | 兵士 | HP5・攻撃5・1ターンに3マス進む | 6 |
+| 歩兵 | 兵士 | HP5・攻撃3・1ターンに2マス進む（遅いけど打たれ強い。サンダーに耐える） | 10 |
+| 騎士 | 兵士 | HP4・攻撃5・1ターンに3マス進む（速くて強いけど、歩兵より打たれ弱い） | 6 |
 | ファイアボール | 魔法 | 相手の城に8ダメージ | 6 |
 | サンダー | 魔法 | 道の上にいる相手の兵士全員に3ダメージ | 6 |
-| ヒール | 魔法 | 自分の城HP+10（上限100） | 6 |
+| ヒール | 魔法 | 自分の城HP+10（上限はその城の上限）。**使い切り** | 6 |
 
 ### STEP 1 の画面
 
