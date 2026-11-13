@@ -292,6 +292,8 @@ export class Game {
         soldierId,
         type: card.type,
         position: soldier.position,
+        hp: soldier.hp,
+        attack: soldier.attack,
       });
     } else {
       this.castSpell(player, card);
