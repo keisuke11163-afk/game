@@ -28,6 +28,11 @@ export class Card {
     return this.def.kind === 'spell';
   }
 
+  /** 使い切り（使ったら山札に戻らない）か */
+  get isExhaust() {
+    return this.def.exhaust === true;
+  }
+
   toState() {
     return { cardId: this.cardId, type: this.type };
   }
@@ -53,6 +58,9 @@ export class Card {
       if (typeof def.name !== 'string' || def.name === '') throw new Error(`${where}: name を書いてください`);
       if (!CARD_KINDS.includes(def.kind)) throw new Error(`${where}: kind は ${CARD_KINDS.join(' / ')} のどれかです`);
       if (!isCount(def.count)) throw new Error(`${where}: count は0以上の整数にしてください`);
+      if (def.exhaust !== undefined && typeof def.exhaust !== 'boolean') {
+        throw new Error(`${where}: exhaust は true か false にしてください（書かなければ false）`);
+      }
 
       if (def.kind === 'soldier') {
         for (const key of ['hp', 'attack', 'speed']) {

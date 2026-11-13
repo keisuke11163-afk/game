@@ -38,6 +38,7 @@ export class Player {
   toState(showHand) {
     return {
       castleHp: this.castle.hp,
+      castleMaxHp: this.castle.maxHp,
       hand: showHand ? this.hand.map((c) => c.toState()) : null,
       handCount: this.hand.length,
       playedThisTurn: this.playedThisTurn,
