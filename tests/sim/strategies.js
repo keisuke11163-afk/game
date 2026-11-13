@@ -126,7 +126,9 @@ export const STRATEGIES = {
   defensive: {
     takeTurn(game, pid, rng, ctx) {
       const { playable } = view(game, pid);
-      playFirst(game, playable, [
+      playSupports(game, pid, ctx);
+      const after = view(game, pid).playable;
+      playFirst(game, after, [
         ...typesWithEffect(ctx, 'healOwnCastle'),
         ...typesWithEffect(ctx, 'damageEnemySoldiers'),
         ...soldierTypes(ctx),

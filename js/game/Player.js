@@ -6,8 +6,9 @@ export class Player {
   /**
    * @param {string} id "p1"〜"p8"
    * @param {number} castleMaxHp
+   * @param {number} [drawPerTurn] 最初の「次のターンに引く枚数」
    */
-  constructor(id, castleMaxHp) {
+  constructor(id, castleMaxHp, drawPerTurn = 0) {
     this.id = id;
     this.castle = new Castle(castleMaxHp);
     /** @type {import('./Card.js').Card[]} */
@@ -20,7 +21,7 @@ export class Player {
     /** このターンに出したカードの枚数（メイン・付加・防御すべて） */
     this.cardsPlayedThisTurn = 0;
     /** 次のターンに引く枚数 */
-    this.drawNextTurn = 0;
+    this.drawNextTurn = drawPerTurn;
     /** 城壁の残り。次の自分のターンの始めに消える */
     this.armor = 0;
     /** 伏せたトラップ [{ trapId, roadId, square, type }]（square は道のマス番号） */
