@@ -5,5 +5,8 @@
   "drawPerTurn": 1,
   "firstTurnDraw": 1,
   "maxHand": 8,
-  "laneLength": 5
+  "laneLength": 5,
+  "elementBonus": 2,
+  "trapMaxPosition": 1,
+  "drawPerCardUsed": 1
 }

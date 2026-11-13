@@ -42,8 +42,19 @@ export const EVENT_TYPES = [
   'spellCast',
   'castleDamaged',
   'castleHealed',
+  'weaponEquipped',
+  'shieldAdded',
+  'castleArmored',
+  'armorExpired',
+  'trapSet',
+  'trapTriggered',
+  'statusApplied',
+  'statusCleared',
   'gameOver',
 ];
+
+/** 属性の強い・弱い：キーの属性は、値の属性に強い（水は火に強い、火は木に強い、木は水に強い） */
+export const ELEMENT_BEATS = { water: 'fire', fire: 'wood', wood: 'water' };
 
 /** rules.json に必要な項目と、許される最小値 */
 const RULE_KEYS = {
@@ -54,6 +65,13 @@ const RULE_KEYS = {
   maxHand: 0,
   laneLength: 1,
   secondPlayerCastleBonus: 0,
+};
+
+/** rules.json の省略できる項目と、省略したときの値 */
+const OPTIONAL_RULES = {
+  elementBonus: 0, // 属性が強いときに増えるダメージ
+  trapMaxPosition: 1, // トラップを置ける、自分の城から数えた位置の上限
+  drawPerCardUsed: 0, // 次のターンに引く枚数 = max(drawPerTurn, 使った枚数 × これ)
 };
 
 const ok = () => ({ ok: true });
@@ -72,11 +90,12 @@ export class Game {
     if (typeof rng !== 'function') throw new Error('rng は 0以上1未満の数を返す関数にしてください');
 
     this.cardDefs = cards;
-    this.rules = { ...rules };
+    this.rules = { ...OPTIONAL_RULES, ...rules };
     this.rng = rng;
 
     this.nextCardNumber = 1;
     this.nextSoldierNumber = 1;
+    this.nextTrapNumber = 1;
     /** @type {Map<string, Set<Function>>} */
     this.listeners = new Map(EVENT_TYPES.map((type) => [type, new Set()]));
 
@@ -88,6 +107,7 @@ export class Game {
       // 2人用のボーナス。3人以上の席ごとのボーナスは STEP 5 で決める（seatCastleBonus）
       const bonus = this.playerOrder.length === 2 && seat === 1 ? this.rules.secondPlayerCastleBonus : 0;
       this.players[id] = new Player(id, this.rules.castleMaxHp + bonus);
+      this.players[id].drawNextTurn = this.rules.drawPerTurn;
     });
     /** @type {Road[]} */
     this.roads = [];
@@ -118,6 +138,12 @@ export class Game {
 
   static validateRules(rules) {
     if (!rules || typeof rules !== 'object') throw new Error('rules.json の中身を渡してください');
+    for (const key of Object.keys(OPTIONAL_RULES)) {
+      const v = rules[key];
+      if (v !== undefined && (!Number.isInteger(v) || v < 0)) {
+        throw new Error(`rules.json の ${key} は 0 以上の整数にしてください（書かなければ ${OPTIONAL_RULES[key]}）`);
+      }
+    }
     for (const [key, min] of Object.entries(RULE_KEYS)) {
       const v = rules[key];
       if (!Number.isInteger(v) || v < min) {
@@ -272,17 +298,24 @@ export class Game {
     return ok();
   }
 
-  /** ターン開始：ドロー → 進軍 → メインへ */
+  /** ターン開始：（城壁が消える）→ ドロー → 進軍 → メインへ */
   beginTurn(playerId) {
     const player = this.players[playerId];
     this.currentPlayer = playerId;
     this.turn += 1;
     this.phase = 'main';
     player.playedThisTurn = false;
+    player.cardsPlayedThisTurn = 0;
     this.emit('turnStarted', { playerId, turn: this.turn });
 
-    // 1. ドロー（先攻の最初のターンだけ firstTurnDraw 枚）
-    const drawCount = this.turn === 1 ? this.rules.firstTurnDraw : this.rules.drawPerTurn;
+    // 城壁は、自分の次のターンの始めに消える
+    if (player.armor > 0) {
+      player.armor = 0;
+      this.emit('armorExpired', { playerId });
+    }
+
+    // 1. ドロー（先攻の最初のターンだけ firstTurnDraw 枚。ほかは前のターンに決まった drawNextTurn 枚）
+    const drawCount = this.turn === 1 ? this.rules.firstTurnDraw : player.drawNextTurn;
     this.drawCards(player, drawCount);
 
     // 2. 進軍
@@ -291,25 +324,55 @@ export class Game {
 
   /**
    * 進軍：出した順に1体ずつ、1マスずつ進める。
-   * 進む前と1マス進むごとに「同じマスか1つ先のマス」に相手の兵士がいないか確かめ、いたら止まって戦う。
-   * 戦ったら（相手だけが消えても）そのターンはその場で止まる。
+   * 1体ごとに：毒のダメージ →（凍結なら休む）→ 動く。
+   * 1マス進むごとに、トラップ → 「同じマスか1つ先のマス」の相手の兵士 の順に確かめる。
+   * 戦ったら（相手だけが消えても）そのターンはその場で止まる。トラップにかかっても止まる。
    * 城に着いたら 移動 → 城にダメージ → 消える。城が落ちたらその場でゲームを止める。
    */
   advanceSoldiers(player) {
     const { laneLength } = this.rules;
 
     for (const soldier of [...player.soldiers]) {
-      if (!player.soldiers.includes(soldier)) continue; // 念のため（自分の番に自分の兵士が先に消えることはない）
+      if (!player.soldiers.includes(soldier)) continue; // 念のため
       const enemy = this.players[soldier.targetId];
       const road = this.findRoad(soldier.roadId);
 
+      // 毒（盾は効かない）
+      if (soldier.poison) {
+        const { amount } = soldier.poison;
+        soldier.takeDamage(amount, { ignoreShield: true });
+        this.emit('soldierDamaged', {
+          playerId: player.id, soldierId: soldier.soldierId, amount, hp: soldier.hp, cause: 'poison', blocked: 0,
+        });
+        soldier.poison.turns -= 1;
+        if (soldier.poison.turns <= 0) {
+          soldier.poison = null;
+          this.emit('statusCleared', { playerId: player.id, soldierId: soldier.soldierId, status: 'poison' });
+        }
+        if (soldier.isDead) {
+          this.removeSoldier(player, soldier, 'killed');
+          continue;
+        }
+      }
+      // 凍結：この進軍は休む
+      if (soldier.frozen > 0) {
+        soldier.frozen -= 1;
+        if (soldier.frozen === 0) {
+          this.emit('statusCleared', { playerId: player.id, soldierId: soldier.soldierId, status: 'frozen' });
+        }
+        continue;
+      }
+
       const from = soldier.position;
       let opponent = this.findClashTarget(soldier, enemy);
+      let trap = null;
       let steps = 0;
       while (!opponent && steps < soldier.speed) {
         soldier.moveForward();
         steps += 1;
         if (soldier.hasReachedCastle(laneLength)) break;
+        trap = this.findTrap(soldier, player, enemy);
+        if (trap) break;
         opponent = this.findClashTarget(soldier, enemy);
       }
 
@@ -325,19 +388,17 @@ export class Game {
         });
       }
 
+      if (trap) {
+        this.triggerTrap(enemy, trap, player, soldier);
+        continue;
+      }
       if (opponent) {
         this.fight(player, soldier, enemy, opponent);
         continue;
       }
       if (!reached) continue;
 
-      enemy.castle.takeDamage(soldier.attack);
-      this.emit('castleDamaged', {
-        playerId: enemy.id,
-        amount: soldier.attack,
-        hp: enemy.castle.hp,
-        source: { kind: 'soldier', soldierId: soldier.soldierId },
-      });
+      this.damageCastle(enemy, soldier.attack, { kind: 'soldier', soldierId: soldier.soldierId });
       player.removeSoldier(soldier.soldierId);
       this.emit('soldierDestroyed', {
         playerId: player.id,
@@ -348,6 +409,51 @@ export class Game {
       // 城が落ちた瞬間にゲームを止める（残りの兵士は動かさない）
       if (this.checkGameOver()) return;
     }
+  }
+
+  /** 城にダメージ。城壁が先に受ける。castleDamaged を出す */
+  damageCastle(owner, amount, source) {
+    const blocked = Math.min(owner.armor, amount);
+    owner.armor -= blocked;
+    owner.castle.takeDamage(amount - blocked);
+    this.emit('castleDamaged', { playerId: owner.id, amount, blocked, hp: owner.castle.hp, source });
+  }
+
+  /** 兵士にダメージ（盾が先に受ける）。soldierDamaged を出し、HPが0なら消す。消えたら true */
+  damageSoldier(owner, soldier, amount, cause) {
+    const blocked = soldier.takeDamage(amount);
+    this.emit('soldierDamaged', {
+      playerId: owner.id, soldierId: soldier.soldierId, amount, hp: soldier.hp, cause, blocked,
+    });
+    if (!soldier.isDead) return false;
+    this.removeSoldier(owner, soldier, 'killed');
+    return true;
+  }
+
+  removeSoldier(owner, soldier, reason) {
+    owner.removeSoldier(soldier.soldierId);
+    this.emit('soldierDestroyed', { playerId: owner.id, soldierId: soldier.soldierId, reason });
+  }
+
+  /** owner の兵士 soldier が今いるマスに、trapOwner のトラップがあれば返す */
+  findTrap(soldier, owner, trapOwner) {
+    const road = this.findRoad(soldier.roadId);
+    const square = road.toSquare(owner.id, soldier.position);
+    return trapOwner.traps.find((t) => t.roadId === road.roadId && t.square === square) || null;
+  }
+
+  triggerTrap(trapOwner, trap, victimOwner, soldier) {
+    trapOwner.traps = trapOwner.traps.filter((t) => t !== trap);
+    this.emit('trapTriggered', {
+      playerId: trapOwner.id,
+      trapId: trap.trapId,
+      type: trap.type,
+      soldierId: soldier.soldierId,
+      roadId: trap.roadId,
+      square: trap.square,
+    });
+    const def = this.cardDefs[trap.type];
+    if (def.effect === 'pit') this.damageSoldier(victimOwner, soldier, def.amount, 'trap');
   }
 
   /**
@@ -366,6 +472,12 @@ export class Game {
     );
   }
 
+  /** a が b に与えるダメージ（攻撃力 ＋ 属性が強ければ elementBonus） */
+  fightDamage(a, b) {
+    const strong = a.element && b.element && ELEMENT_BEATS[a.element] === b.element;
+    return a.attack + (strong ? this.rules.elementBonus : 0);
+  }
+
   /** 進軍中の attacker と、相手の defender が戦う。お互いに攻撃力ぶんのダメージを同時に与える */
   fight(player, attacker, enemy, defender) {
     const road = this.findRoad(attacker.roadId);
@@ -376,28 +488,20 @@ export class Game {
       square: road.toSquare(player.id, attacker.position), // 攻める側が止まったマス
     });
 
-    const toDefender = attacker.attack;
-    const toAttacker = defender.attack;
-    defender.takeDamage(toDefender);
-    attacker.takeDamage(toAttacker);
+    const toDefender = this.fightDamage(attacker, defender);
+    const toAttacker = this.fightDamage(defender, attacker);
+    const blockedD = defender.takeDamage(toDefender);
+    const blockedA = attacker.takeDamage(toAttacker);
     this.emit('soldierDamaged', {
-      playerId: enemy.id,
-      soldierId: defender.soldierId,
-      amount: toDefender,
-      hp: defender.hp,
+      playerId: enemy.id, soldierId: defender.soldierId, amount: toDefender, hp: defender.hp, cause: 'fight', blocked: blockedD,
     });
     this.emit('soldierDamaged', {
-      playerId: player.id,
-      soldierId: attacker.soldierId,
-      amount: toAttacker,
-      hp: attacker.hp,
+      playerId: player.id, soldierId: attacker.soldierId, amount: toAttacker, hp: attacker.hp, cause: 'fight', blocked: blockedA,
     });
 
     // 消える順番は soldierDamaged と同じ（守る側 → 攻める側）
     for (const [owner, s] of [[enemy, defender], [player, attacker]]) {
-      if (!s.isDead) continue;
-      owner.removeSoldier(s.soldierId);
-      this.emit('soldierDestroyed', { playerId: owner.id, soldierId: s.soldierId, reason: 'killed' });
+      if (s.isDead) this.removeSoldier(owner, s, 'killed');
     }
   }
 
@@ -409,22 +513,49 @@ export class Game {
    * @returns {{targets: object[], reason: string}} 対象がないときの理由も返す
    */
   listTargets(player, card) {
-    if (card.isSoldier) {
-      return {
-        targets: this.neighborsOf(player.id).map((p) => ({ playerId: p.id })),
-        reason: '兵士を送れる相手がいません',
-      };
+    const def = card.def;
+    const playerTargets = (players) => players.map((p) => ({ playerId: p.id }));
+    const ownSoldiers = () => player.soldiers.map((x) => ({ soldierId: x.soldierId }));
+    switch (def.kind) {
+      case 'soldier':
+        return { targets: playerTargets(this.neighborsOf(player.id)), reason: '兵士を送れる相手がいません' };
+      case 'weapon':
+        return { targets: ownSoldiers(), reason: '道の上に自分の兵士がいません' };
+      case 'trap': {
+        const targets = [];
+        for (const road of this.roads.filter((r) => r.has(player.id))) {
+          for (let pos = 0; pos <= Math.min(this.rules.trapMaxPosition, this.rules.laneLength - 1); pos++) {
+            const square = road.toSquare(player.id, pos);
+            if (!player.traps.some((t) => t.roadId === road.roadId && t.square === square)) {
+              targets.push({ roadId: road.roadId, square });
+            }
+          }
+        }
+        return { targets, reason: 'トラップを置ける場所がありません' };
+      }
+      default:
+        break;
     }
-    switch (card.def.effect) {
+    const hasSoldiers = (p) => p.soldiers.length > 0;
+    switch (def.effect) {
       case 'damageEnemyCastle':
-        return { targets: this.opponentsOf(player.id).map((p) => ({ playerId: p.id })), reason: '相手がいません' };
+        return { targets: playerTargets(this.opponentsOf(player.id)), reason: '相手がいません' };
       case 'damageEnemySoldiers':
+      case 'poisonEnemySoldiers':
+      case 'freezeEnemySoldiers':
         return {
-          targets: this.opponentsOf(player.id).filter((p) => p.soldiers.length > 0).map((p) => ({ playerId: p.id })),
+          targets: playerTargets(this.opponentsOf(player.id).filter(hasSoldiers)),
           reason: '道の上に相手の兵士がいません',
         };
       case 'healOwnCastle':
         return { targets: player.castle.isFull ? [] : [{ playerId: player.id }], reason: '城のHPが満タンです' };
+      case 'shieldSoldier':
+        return { targets: ownSoldiers(), reason: '道の上に自分の兵士がいません' };
+      case 'armorCastle':
+        return {
+          targets: player.armor >= def.amount ? [] : [{ playerId: player.id }],
+          reason: 'もっと強い城壁があります',
+        };
       default:
         return { targets: [], reason: 'このカードは出せません' };
     }
@@ -442,7 +573,8 @@ export class Game {
       if (this.opponentsOf(player.id).some((p) => p.findInHand(cardId))) return fail('あなたの番ではありません');
       return fail('そのカードは手札にありません');
     }
-    if (player.playedThisTurn) return fail('このターンはもうカードを出しました');
+    // メイン（兵士・魔法）は1ターン1枚。付加（武器）と防御は何枚でも
+    if (card.slot === 'main' && player.playedThisTurn) return fail('このターンはもうメインのカードを出しました');
     return { ok: true, player, card };
   }
 
@@ -502,7 +634,8 @@ export class Game {
     if (resolved.needsTarget) return { ok: false, reason: '対象を選んでください', needsTarget: true };
 
     const card = player.takeFromHand(cardId);
-    player.playedThisTurn = true;
+    if (card.slot === 'main') player.playedThisTurn = true;
+    player.cardsPlayedThisTurn += 1;
     // 使ったカードは（兵士も）すぐ捨て札へ。使い切りのカードは、二度と山札に戻らない置き場へ
     if (card.isExhaust) this.exhaustedPile.push(card);
     else this.discardPile.push(card);
@@ -524,8 +657,10 @@ export class Game {
         hp: soldier.hp,
         attack: soldier.attack,
       });
-    } else {
+    } else if (card.isSpell) {
       this.castSpell(player, card, this.players[resolved.target.playerId]);
+    } else {
+      this.playSupport(player, card, resolved.target);
     }
 
     this.checkGameOver();
@@ -539,35 +674,31 @@ export class Game {
     switch (effect) {
       case 'damageEnemyCastle':
         this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id });
-        enemy.castle.takeDamage(amount);
-        this.emit('castleDamaged', {
-          playerId: enemy.id,
-          amount,
-          hp: enemy.castle.hp,
-          source: { kind: 'spell', type: card.type },
-        });
+        this.damageCastle(enemy, amount, { kind: 'spell', type: card.type });
         break;
 
       case 'damageEnemySoldiers':
         this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id });
-        for (const soldier of [...enemy.soldiers]) {
-          soldier.takeDamage(amount);
-          this.emit('soldierDamaged', {
-            playerId: enemy.id,
-            soldierId: soldier.soldierId,
-            amount,
-            hp: soldier.hp,
-          });
-          if (soldier.isDead) {
-            enemy.removeSoldier(soldier.soldierId);
-            this.emit('soldierDestroyed', {
-              playerId: enemy.id,
-              soldierId: soldier.soldierId,
-              reason: 'killed',
-            });
+        for (const soldier of [...enemy.soldiers]) this.damageSoldier(enemy, soldier, amount, 'spell');
+        break;
+
+      case 'poisonEnemySoldiers':
+      case 'freezeEnemySoldiers': {
+        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id });
+        const status = effect === 'poisonEnemySoldiers' ? 'poison' : 'frozen';
+        for (const soldier of enemy.soldiers) {
+          // 重ねがけでは増えない：残りの回数を長い方にそろえる
+          if (status === 'poison') {
+            const turns = Math.max(card.def.turns, soldier.poison?.turns ?? 0);
+            soldier.poison = { amount: Math.max(amount, soldier.poison?.amount ?? 0), turns };
+            this.emit('statusApplied', { playerId: enemy.id, soldierId: soldier.soldierId, status, turns });
+          } else {
+            soldier.frozen = Math.max(card.def.turns, soldier.frozen);
+            this.emit('statusApplied', { playerId: enemy.id, soldierId: soldier.soldierId, status, turns: soldier.frozen });
           }
         }
         break;
+      }
 
       case 'healOwnCastle': {
         this.emit('spellCast', { playerId: player.id, type: card.type, target: player.id });
@@ -579,6 +710,37 @@ export class Game {
       default:
         // Card.validateDefinitions で弾いているので、ここには来ない
         break;
+    }
+  }
+
+  /** 付加（武器）・防御・トラップのカードを使う */
+  playSupport(player, card, target) {
+    const def = card.def;
+    if (def.kind === 'weapon' || def.effect === 'shieldSoldier') {
+      const soldier = player.soldiers.find((x) => x.soldierId === target.soldierId);
+      if (def.kind === 'weapon') {
+        // 1体に1つ。新しく持たせると前の武器は消える
+        soldier.weapon = card.type;
+        soldier.weaponBonus = def.attackBonus;
+        soldier.element = def.element ?? null;
+        this.emit('weaponEquipped', {
+          playerId: player.id, soldierId: soldier.soldierId, type: card.type, attack: soldier.attack, element: soldier.element,
+        });
+      } else {
+        soldier.shield += def.amount;
+        this.emit('shieldAdded', { playerId: player.id, soldierId: soldier.soldierId, amount: def.amount, shield: soldier.shield });
+      }
+      return;
+    }
+    if (def.effect === 'armorCastle') {
+      player.armor = def.amount; // 重ならない（今より多いときだけ出せる）
+      this.emit('castleArmored', { playerId: player.id, armor: player.armor });
+      return;
+    }
+    if (def.kind === 'trap') {
+      const trapId = `t${String(this.nextTrapNumber++).padStart(2, '0')}`;
+      player.traps.push({ trapId, roadId: target.roadId, square: target.square, type: card.type });
+      this.emit('trapSet', { playerId: player.id, trapId, roadId: target.roadId, square: target.square });
     }
   }
 
@@ -623,7 +785,10 @@ export class Game {
   }
 
   passTurn() {
-    this.players[this.currentPlayer].playedThisTurn = false;
+    const player = this.players[this.currentPlayer];
+    // 次のターンに引く枚数 ＝ max(drawPerTurn, このターンに使った枚数 × drawPerCardUsed)
+    player.drawNextTurn = Math.max(this.rules.drawPerTurn, player.cardsPlayedThisTurn * this.rules.drawPerCardUsed);
+    player.playedThisTurn = false;
     this.beginTurn(this.nextPlayerAfter(this.currentPlayer));
   }
 
