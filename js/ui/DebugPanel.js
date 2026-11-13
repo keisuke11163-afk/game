@@ -15,6 +15,8 @@ export class DebugPanel {
    *           onRestart: (seed: number) => void,
    *           onChanged: () => void,
    *           onConfigChanged: () => void,
+   *           onTestClash: () => void,
+   *           getPlaceholders: () => { missing: string[], standIns: [string, string][] },
    *           notify: (text: string, kind?: string) => void }} opts
    */
   constructor(opts) {
@@ -74,7 +76,19 @@ export class DebugPanel {
     const handTypes = state?.players[viewer]?.hand?.map((c) => c.type) ?? [];
     const off = (name) => (this.api(name) ? '' : `<span class="off">ロジック未対応（game.${name}）</span>`);
 
+    const ph = this.getPlaceholders();
+    const showSquares = document.getElementById('app').classList.contains('show-squares');
     p.innerHTML = `
+      <h3>見た目の確認</h3>
+      <div class="row"><button type="button" class="test-clash">ぶつかる演出を試す</button></div>
+      <div class="note">兵士同士の戦い（soldiersClashed）の演出だけを流します。ゲームの状態は変わりません</div>
+      <div class="row"><label><input type="checkbox" class="show-squares" ${showSquares ? 'checked' : ''}> マスの位置と番号を表示</label></div>
+      <div class="note">位置は js/ui/config.js の board で調整します（番号は道のマス番号）</div>
+
+      <h3>仮の絵：あと ${ph.missing.length} 枚</h3>
+      ${ph.missing.length ? `<ul class="missing">${ph.missing.map((f) => `<li>${f}</li>`).join('')}</ul>` : '<div class="note">全部そろっています</div>'}
+      ${ph.standIns.length ? `<div class="note">代わりの画像で表示中：${ph.standIns.map(([k, v]) => `${k} → ${v}`).join('、')}</div>` : ''}
+
       <h3>乱数シード（山札の順番を固定）</h3>
       <div class="row">いま：<b>${this.getSeed()}</b>
         <input type="number" class="seed" value="${this.getSeed()}">
@@ -118,6 +132,10 @@ export class DebugPanel {
       return bad.length === 0;
     };
 
+    q('.test-clash').addEventListener('click', () => this.onTestClash());
+    q('.show-squares').addEventListener('change', (e) => {
+      document.getElementById('app').classList.toggle('show-squares', e.target.checked);
+    });
     q('.restart').addEventListener('click', () => this.onRestart(Number(q('.seed').value) >>> 0));
     q('.set-deck').addEventListener('click', () => {
       const list = types(q('.deck').value);

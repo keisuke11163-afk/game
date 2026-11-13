@@ -12,10 +12,11 @@ import { Animations } from './ui/Animations.js';
 import { DebugPanel } from './ui/DebugPanel.js';
 import { UI_CONFIG } from './ui/config.js';
 import { playerName, reasonText } from './ui/text.js';
+import { loadAssets, src, placeholders, standIns, PLAYER_COLOR, castleKey } from './ui/assets.js';
 
 const EVENT_TYPES = [
   'turnStarted', 'cardDrawn', 'deckShuffled', 'cardPlayed', 'discardRequired', 'cardDiscarded',
-  'soldierDeployed', 'soldierMoved', 'soldierDamaged', 'soldierDestroyed', 'spellCast',
+  'soldierDeployed', 'soldierMoved', 'soldiersClashed', 'soldierDamaged', 'soldierDestroyed', 'spellCast',
   'castleDamaged', 'castleHealed', 'gameOver',
 ];
 
@@ -36,6 +37,10 @@ const el = {
   resultTitle: document.querySelector('#result .result-title'),
   resultSub: document.querySelector('#result .result-sub'),
   confetti: document.querySelector('#result .confetti'),
+  resultCastle: document.querySelector('#result .result-castle'),
+  handoverCastle: document.querySelector('#handover .handover-castle'),
+  loading: $('loading'),
+  loadingText: document.querySelector('#loading .loading-text'),
   rematch: $('rematch'),
   error: $('error'),
 };
@@ -75,6 +80,19 @@ async function boot() {
     return;
   }
 
+  // 画像を全部読み込んでから画面を出す（ないものは仮の絵になる）
+  try {
+    await loadAssets(cards, (done, total) => { el.loadingText.textContent = `読み込み中 ${done}/${total}`; });
+  } catch (err) {
+    console.error(err);
+    showError(`画像を読み込めませんでした：${err.message}`);
+    return;
+  }
+  applyAssetImages();
+  el.loading.hidden = true;
+  const missing = placeholders();
+  if (missing.length) console.info(`仮の絵を使っている画像（${missing.length}枚）:\n${missing.join('\n')}`);
+
   renderer = new Renderer({ cards, rules, onSoldierTap: showSoldierInfo });
   handView = new HandView({ cards, rules, onPlay: playCard, onDiscard: discard, onNotice: toast });
   anim = new Animations({ renderer, handView, cards, rules });
@@ -95,6 +113,8 @@ async function boot() {
       onRestart: (s) => newGame(s),
       onChanged: () => { if (!busy) settle(); },
       onConfigChanged: () => { anim.applyCssTiming(); handView.updateDetail(); },
+      onTestClash: testClash,
+      getPlaceholders: () => ({ missing: placeholders(), standIns: standIns() }),
       notify: toast,
     });
   }
@@ -328,6 +348,8 @@ function handover(playerId, turn) {
   handView.clear();
   setBusy(true);
   el.handover.dataset.player = playerId;
+  el.handover.classList.remove('leaving');
+  el.handoverCastle.src = src(castleKey(PLAYER_COLOR[playerId]));
   el.handoverTurn.textContent = `ターン ${turn}`;
   el.handoverTitle.textContent = `${playerName(playerId)}の番です`;
   el.handover.hidden = false;
@@ -348,7 +370,12 @@ function handover(playerId, turn) {
       renderer.renderAll(model);
       handView.render(model.hand);
       handView.setPlayability(new Map());
-      el.handover.hidden = true;
+      // ページをめくって盤面を見せる（めくっている間も先へ進む）
+      el.handover.classList.add('leaving');
+      setTimeout(() => {
+        el.handover.hidden = true;
+        el.handover.classList.remove('leaving');
+      }, 260 * UI_CONFIG.speed);
       anim.delay(UI_CONFIG.timing.afterTurnStart).then(resolve);
     };
     el.handover.addEventListener('click', open);
@@ -360,14 +387,96 @@ async function showResult(winner) {
   setBusy(true);
   await anim.delay(UI_CONFIG.timing.gameOverDelay);
   el.result.dataset.player = winner;
+  el.resultCastle.src = src(castleKey(PLAYER_COLOR[winner]));
   el.resultTitle.textContent = `${playerName(winner)}の勝ち！`;
   el.resultSub.textContent = `${model.turn}ターンで決着`;
   const colors = winner === 'p1'
-    ? ['#3b82f6', '#93c5fd', '#fbbf24', '#ffffff']
-    : ['#ef4444', '#fca5a5', '#fbbf24', '#ffffff'];
+    ? ['#5aa9e6', '#bfe3fb', '#f5c842', '#fff7e0', '#ef5f6e']
+    : ['#f39a4a', '#ffd9b0', '#f5c842', '#fff7e0', '#7fd36e'];
   anim.confetti(el.confetti, colors);
   el.result.hidden = false;
   el.rematch.focus({ preventScroll: true });
+}
+
+// ---------- 画像 ----------
+
+/** CSS で使う画像（背景・羊皮紙・木の札など）と、決まった img に画像を入れる */
+function applyAssetImages() {
+  const root = document.documentElement.style;
+  const url = (key) => `url("${src(key)}")`;
+  root.setProperty('--img-bg', url('bg:board'));
+  root.setProperty('--img-parchment', url('ui:panel-parchment'));
+  root.setProperty('--img-plank', url('ui:button-end-turn'));
+  root.setProperty('--img-card-back', url('ui:card-back'));
+  root.setProperty('--img-heart', url('ui:icon-heart'));
+  root.setProperty('--img-sword', url('ui:icon-sword'));
+  root.setProperty('--panel-slice', String(UI_CONFIG.panel.slice));
+  root.setProperty('--panel-border', `${UI_CONFIG.panel.border}px`);
+  root.setProperty('--card-w-base', `${UI_CONFIG.card.width}px`);
+  const L = UI_CONFIG.card.layout;
+  root.setProperty('--art-x', `${L.art.x * 100}%`);
+  root.setProperty('--art-y', `${L.art.y * 100}%`);
+  root.setProperty('--art-w', `${L.art.w * 100}%`);
+  root.setProperty('--art-h', `${L.art.h * 100}%`);
+  root.setProperty('--name-y', `${L.name.y * 100}%`);
+  root.setProperty('--name-h', `${L.name.h * 100}%`);
+  for (const [side, m] of [['l', L.medalLeft], ['r', L.medalRight]]) {
+    root.setProperty(`--medal-${side}-x`, `${m.x * 100}%`);
+    root.setProperty(`--medal-${side}-y`, `${m.y * 100}%`);
+    root.setProperty(`--medal-d`, `${m.r * 200}%`);
+  }
+  for (const img of document.querySelectorAll('.sign-img')) img.src = src('ui:sign-hp');
+  document.querySelector('#handover .page-img').src = src('ui:page-handover');
+  document.querySelector('#result .banner-img').src = src('ui:banner-win');
+}
+
+// ---------- デバッグ：ぶつかる演出を試す ----------
+
+/**
+ * soldiersClashed はまだロジックから来ないので、見た目だけ試す。ゲームの状態は変えない。
+ * 道の上に両方の兵士がいればその2体、いなければ仮の2体を真ん中あたりに出してぶつける。
+ */
+async function testClash() {
+  if (busy || !game) return;
+  const aId = viewerId;
+  const dId = renderer.opponentOf(viewerId);
+  const L = rules.laneLength;
+  const onRoad = (id) => model.players[id].soldiers.find((s) => s.position < L);
+  const posOf = (id, square) => (id === 'p1' ? square : L - 1 - square);   // 道のマス番号 → position
+  const clamp = (n) => Math.max(0, Math.min(L - 1, n));
+  const toward = viewerId === 'p1' ? 1 : -1;   // 相手の城の向き（道のマス番号）
+  const temp = [];
+  let a = onRoad(aId);
+  let d = onRoad(dId);
+  if (!a) {
+    const sq = d ? clamp(renderer.squareOf(dId, d.position) - toward) : Math.floor((L - 1) / 2);
+    a = { soldierId: 'dbg-a', type: 'infantry', hp: 3, attack: 3, position: posOf(aId, sq) };
+    temp.push([aId, a]);
+  }
+  if (!d) {
+    d = { soldierId: 'dbg-d', type: 'knight', hp: 5, attack: 5, position: posOf(dId, clamp(renderer.squareOf(aId, a.position) + toward)) };
+    temp.push([dId, d]);
+  }
+  for (const [pid, s] of temp) renderer.addSoldier(pid, s, { appear: true });
+  const scratch = structuredClone(model);
+  for (const [pid, s] of temp) scratch.players[pid].soldiers.push({ ...s });
+  const events = [
+    { type: 'soldiersClashed', payload: { attacker: { playerId: aId, soldierId: a.soldierId }, defender: { playerId: dId, soldierId: d.soldierId }, square: renderer.squareOf(dId, d.position) } },
+    { type: 'soldierDamaged', payload: { playerId: dId, soldierId: d.soldierId, amount: a.attack, hp: d.hp - a.attack } },
+    { type: 'soldierDamaged', payload: { playerId: aId, soldierId: a.soldierId, amount: d.attack, hp: a.hp - d.attack } },
+  ];
+  for (const [pid, s, dmg] of [[dId, d, a.attack], [aId, a, d.attack]]) {
+    if (s.hp - dmg <= 0) events.push({ type: 'soldierDestroyed', payload: { playerId: pid, soldierId: s.soldierId, reason: 'killed' } });
+  }
+  setBusy(true);
+  await anim.delay(UI_CONFIG.timing.deploy);
+  while (events.length) {
+    const ev = events.shift();
+    await anim.play(ev, events, scratch, { viewerId, lookupCard });
+  }
+  anim.endSkip();
+  await anim.delay(250);
+  await settle();   // 本当の状態で描き直す（仮の2体は消え、HPも元に戻る）
 }
 
 // ---------- 小物 ----------
