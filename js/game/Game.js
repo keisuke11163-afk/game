@@ -427,6 +427,12 @@ export class Game {
 
   /** ターン開始：（城壁が消える）→ ドロー → 進軍 → メインへ */
   beginTurn(playerId) {
+    // 周回の上限：その周回を全員が終えたら、城HPの割合で決着
+    const isRoundStart = playerId === this.alivePlayerIds()[0];
+    if (isRoundStart && this.rules.maxRounds > 0 && this.round >= this.rules.maxRounds) {
+      this.finishByRoundLimit();
+      return;
+    }
     const player = this.players[playerId];
     this.currentPlayer = playerId;
     this.turn += 1;
@@ -1109,16 +1115,70 @@ export class Game {
     this.beginTurn(this.nextPlayerAfter(this.currentPlayer));
   }
 
-  /** どちらかの城HPが0以下なら決着させる。決着したら true */
+  /**
+   * 城HPが0以下の人がいたら、勝利条件（rules.winCondition）に従って決着させる。決着したら true
+   *   firstDestroy：城を落とした人（＝手番の人）の勝ち
+   *   lastStanding：城が落ちた人は抜ける。残りが1人になったら、その人の勝ち
+   */
   checkGameOver() {
     if (this.phase === 'gameOver') return true;
-    const loser = this.alivePlayerIds().find((id) => this.players[id].castle.isDestroyed);
-    if (!loser) return false;
-    // 城を削れるのは手番の人の行動だけなので、勝つのは手番の人（2人なら、城が残っている方）
-    this.winner = this.currentPlayer;
+    const fallen = this.alivePlayerIds().filter((id) => this.players[id].castle.isDestroyed);
+    if (fallen.length === 0) return false;
+    if (this.rules.winCondition === 'firstDestroy') {
+      // 城を削れるのは手番の人の行動だけなので、勝つのは手番の人
+      this.finish(this.currentPlayer, 'castleDestroyed');
+      return true;
+    }
+    for (const id of fallen) this.eliminate(this.players[id], this.currentPlayer);
+    const alive = this.alivePlayerIds();
+    if (alive.length <= 1) {
+      this.finish(alive[0] ?? this.currentPlayer, 'lastStanding');
+      return true;
+    }
+    return false;
+  }
+
+  finish(winner, reason) {
+    this.winner = winner;
     this.phase = 'gameOver';
-    this.emit('gameOver', { winner: this.winner });
-    return true;
+    this.emit('gameOver', { winner, reason });
+  }
+
+  /** 城が落ちた人を抜けさせる（lastStanding）。兵士・トラップは消え、手札は捨て札へ。道をつなぎ直す */
+  eliminate(player, by) {
+    player.eliminated = true;
+    this.emit('playerEliminated', { playerId: player.id, by });
+    for (const s of [...player.soldiers]) this.removeSoldier(player, s, 'eliminated');
+    player.traps = [];
+    const pile = this.pileOf(player.id);
+    pile.discard.push(...player.hand);
+    player.hand = [];
+    const { opened, closed } = this.rebuildRoads();
+    for (const road of closed) {
+      const monsterIds = this.monsters.filter((m) => m.roadId === road.roadId).map((m) => m.monsterId);
+      this.monsters = this.monsters.filter((m) => m.roadId !== road.roadId);
+      this.emit('roadClosed', { roadId: road.roadId, monsterIds });
+      for (const id of this.alivePlayerIds()) {
+        const p = this.players[id];
+        for (const s of p.soldiers.filter((x) => x.roadId === road.roadId)) this.removeSoldier(p, s, 'roadClosed');
+        p.traps = p.traps.filter((t) => t.roadId !== road.roadId);
+      }
+    }
+    for (const road of opened) this.emit('roadOpened', { roadId: road.roadId, players: [...road.players] });
+  }
+
+  /** 周回の上限：城HPの割合 → 城HP → 席順が後ろ、の順にいちばんの人の勝ち */
+  finishByRoundLimit() {
+    const alive = this.alivePlayerIds().map((id) => this.players[id]);
+    const seat = (p) => this.playerOrder.indexOf(p.id);
+    alive.sort((a, b) => {
+      const ra = a.castle.hp / a.castle.maxHp;
+      const rb = b.castle.hp / b.castle.maxHp;
+      if (ra !== rb) return rb - ra;
+      if (a.castle.hp !== b.castle.hp) return b.castle.hp - a.castle.hp;
+      return seat(b) - seat(a);
+    });
+    this.finish(alive[0].id, 'roundLimit');
   }
 
   // ================= 状態 =================
@@ -1129,8 +1189,24 @@ export class Game {
    */
   getState(viewerId) {
     const players = {};
-    for (const id of this.playerOrder) players[id] = this.players[id].toState(id === viewerId);
+    const own = this.rules.deckMode === 'own';
+    for (const id of this.playerOrder) {
+      const p = this.players[id];
+      const pile = this.pileOf(id);
+      players[id] = {
+        ...p.toState(id === viewerId),
+        castleType: p.castleType,
+        maxHand: p.maxHand,
+        deckId: p.deckId ?? null,
+        deckCount: own ? pile.deck.length : null,
+        discardCount: own ? pile.discard.length : null,
+        exhaustedCount: own ? pile.exhausted.length : null,
+      };
+    }
+    // いちばん上の山札の数：shared は共通の山札、own は viewer 本人の山札（viewer がいなければ null）
+    const topPile = own ? (this.piles.has(viewerId) ? this.pileOf(viewerId) : null) : this.pileOf(this.playerOrder[0]);
     return {
+      deckMode: this.rules.deckMode,
       playerOrder: [...this.playerOrder],
       round: this.round,
       monsters: this.monsters.map((m) => m.toState()),
@@ -1139,9 +1215,9 @@ export class Game {
       currentPlayer: this.currentPlayer,
       phase: this.phase,
       winner: this.winner,
-      deckCount: this.deck.length,
-      discardCount: this.discardPile.length,
-      exhaustedCount: this.exhaustedPile.length,
+      deckCount: topPile ? topPile.deck.length : null,
+      discardCount: topPile ? topPile.discard.length : null,
+      exhaustedCount: topPile ? topPile.exhausted.length : null,
       players,
     };
   }
@@ -1171,10 +1247,13 @@ export class Game {
   }
 
   /** 山札をカード種類の並びで作り直す。配列の先頭から順に引かれる。カードIDは新しく振る */
-  debugSetDeck(types) {
+  debugSetDeck(types, playerId) {
     const bad = this.findUnknownType(types);
     if (bad !== null) return fail(bad);
-    this.deck = types.map((type) => this.createCard(type));
+    // deckMode "own" のときは playerId の山札（省略すると手番の人）
+    const owner = playerId ?? this.currentPlayer;
+    if (!this.piles.has(owner)) return fail('そのプレイヤーはいません');
+    this.pileOf(owner).deck = types.map((type) => this.createCard(type));
     return ok();
   }
 

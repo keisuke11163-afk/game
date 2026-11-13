@@ -242,3 +242,31 @@ test('画面のファイルも配る。リポジトリの外や関係ないフ�
     server.close();
   }
 });
+
+test('3人の部屋：3人そろったら始まり、それぞれ自分の手札だけ届く', async () => {
+  const data = loadData();
+  let seed = 5;
+  const server = createGameServer({ data: { ...data, rules: { ...data.rules, playerCount: 3 } }, makeRng: () => seededRng(seed++) });
+  await new Promise((r) => server.listen(0, r));
+  const base = `http://localhost:${server.address().port}`;
+  const clients = [];
+  try {
+    const joins = [];
+    for (const name of ['A', 'B', 'C']) joins.push(await post(base, '/api/join', { passphrase: 'three', name }));
+    assert.deepEqual(joins.map((j) => j.playerId), ['p1', 'p2', 'p3']);
+    for (const j of joins) clients.push(await openStream(base, j.token));
+    for (const [i, c] of clients.entries()) {
+      const st = (await c.waitFor((m) => m.type === 'state')).state;
+      assert.deepEqual(st.playerOrder, ['p1', 'p2', 'p3']);
+      for (const id of st.playerOrder) {
+        if (id === `p${i + 1}`) assert.ok(Array.isArray(st.players[id].hand));
+        else assert.equal(st.players[id].hand, null);
+      }
+    }
+    assert.equal((await post(base, '/api/join', { passphrase: 'three', name: 'D' })).ok, false);
+  } finally {
+    clients.forEach((c) => c.close());
+    server.closeAllConnections();
+    server.close();
+  }
+});

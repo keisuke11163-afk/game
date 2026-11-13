@@ -24,11 +24,17 @@ function playWith(game, cardId, chooseTarget) {
   return t ? game.playCard(cardId, t).ok : false;
 }
 
+/** 同じくらいのときに、いつも同じ相手を選ばないための乱数（takeTurn の最初に入れる） */
+let tieRng = Math.random;
+
 function weakest(game, targets) {
   const players = targets.filter((t) => t.playerId);
   if (!players.length) return targets[0];
   const st = game.getState(null).players;
-  return players.reduce((a, b) => (st[b.playerId].castleHp / st[b.playerId].castleMaxHp < st[a.playerId].castleHp / st[a.playerId].castleMaxHp ? b : a));
+  const ratio = (t) => st[t.playerId].castleHp / st[t.playerId].castleMaxHp;
+  const min = Math.min(...players.map(ratio));
+  const ties = players.filter((t) => ratio(t) - min < 0.1); // 1割以内の差は同じくらいとみなす
+  return ties[Math.floor(tieRng() * ties.length)];
 }
 
 /** 種類の優先順に、出せる最初のカードを出す */
@@ -95,7 +101,7 @@ function soldierTypes(ctx) {
 const typesWithEffect = (ctx, effect) =>
   Object.entries(ctx.cards).filter(([, d]) => d.effect === effect).map(([t]) => t);
 
-export const STRATEGIES = {
+const RAW_STRATEGIES = {
   /** 出せるカードからランダムに1枚 */
   random: {
     takeTurn(game, pid, rng) {
@@ -217,3 +223,17 @@ function smartTurn(game, pid, ctx) {
     ...typesWithEffect(ctx, 'healOwnCastle'),
   ]);
 }
+
+/** どの戦い方も、ターンの最初に同点の選び方の乱数を入れる */
+export const STRATEGIES = Object.fromEntries(
+  Object.entries(RAW_STRATEGIES).map(([name, st]) => [
+    name,
+    {
+      ...st,
+      takeTurn(game, pid, rng, ctx) {
+        tieRng = rng;
+        return st.takeTurn(game, pid, rng, ctx);
+      },
+    },
+  ]),
+);

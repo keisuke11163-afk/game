@@ -13,7 +13,14 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export function loadData(dir = join(ROOT, 'data')) {
   const read = (name) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
   const optional = (name) => (existsSync(join(dir, name)) ? read(name) : null);
-  return { cards: read('cards.json'), rules: read('rules.json'), monsters: optional('monsters.json'), upgrades: optional('upgrades.json') };
+  return {
+    cards: read('cards.json'),
+    rules: read('rules.json'),
+    monsters: optional('monsters.json'),
+    upgrades: optional('upgrades.json'),
+    castles: optional('castles.json'),
+    decks: optional('decks.json'),
+  };
 }
 
 const MAX_BODY = 16 * 1024;
@@ -74,7 +81,6 @@ function sendJson(res, status, body) {
 export function createGameServer({ data = loadData(), makeRng = () => Math.random } = {}) {
   // data/ が間違っていたら、起動したときに分かるようにする（試合が始まってから落ちないように）
   new Game({ ...data, rng: makeRng() });
-  if ((data.rules.playerCount ?? 2) !== 2) throw new Error('オンライン対戦は今は2人だけです（rules.json の playerCount）');
   const lobby = new Lobby(data, makeRng);
   const sweeper = setInterval(() => lobby.sweep(30 * 60 * 1000), 60 * 1000);
   sweeper.unref();

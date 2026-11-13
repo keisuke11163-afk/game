@@ -2,16 +2,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game, EVENT_TYPES } from '../js/game/Game.js';
-import { Player } from '../js/game/Player.js';
 import { buildData, seededRng, recordEvents } from './helpers.js';
 
-/** テストのために3人のゲームを作る（人数の設定は STEP 5 で入る。それまでは内部を組み立てる） */
+/** 3人のゲーム（rules.playerCount: 3） */
 function threePlayers() {
   const { cards, rules } = buildData({ source: 'fixture' });
-  const game = new Game({ cards, rules, rng: seededRng(2) });
-  game.playerOrder = ['p1', 'p2', 'p3'];
-  game.players.p3 = new Player('p3', rules.castleMaxHp);
-  game.rebuildRoads();
+  const game = new Game({ cards, rules: { ...rules, playerCount: 3 }, rng: seededRng(2) });
   game.debugSetDeck(Array(20).fill('heal'));
   return game;
 }
@@ -113,7 +109,7 @@ test('3人：兵士はとなりの人だけ、ファイアボールは全員、�
   assert.deepEqual(r, { ok: false, reason: '対象を選んでください', needsTarget: true });
   assert.equal(JSON.stringify(game.getState('p1')), before); // 手札も playedThisTurn も変わらない
   assert.equal(game.playCard(fb, { playerId: 'p3', extra: undefined }).ok, true);
-  assert.equal(game.getState(null).players.p3.castleHp, 17);
+  assert.equal(game.getState(null).players.p3.castleHp, 27 - 8); // 3人なら席3は城ボーナス+2
 });
 
 test('3人：別の道の兵士とはぶつからない。手番の人が城を落としたら、その人の勝ち', () => {

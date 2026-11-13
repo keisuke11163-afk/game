@@ -11,5 +11,12 @@
   "drawPerCardUsed": 1,
   "monsterFirstRound": 3,
   "monsterCooldownRounds": 2,
-  "monsterSpawnChance": 0.35
+  "monsterSpawnChance": 0.35,
+  "playerCount": 2,
+  "winCondition": "firstDestroy",
+  "castleSpellRange": "any",
+  "maxRounds": 60,
+  "deckMode": "shared",
+  "defaultCastle": "standard",
+  "defaultDeck": "balanced"
 }

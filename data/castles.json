@@ -1,0 +1,6 @@
+{
+  "standard": { "name": "ふつうの城" },
+  "fortress": { "name": "とりで", "hpBonus": 5, "maxHandBonus": -2 },
+  "tower":    { "name": "魔法の塔", "hpBonus": -6, "castleSpellBonus": 2 },
+  "barracks": { "name": "兵舎", "hpBonus": -5, "soldierAttackBonus": 1 }
+}

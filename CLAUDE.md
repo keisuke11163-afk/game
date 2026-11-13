@@ -97,6 +97,7 @@ js/
     Soldier.js
     Road.js        … 道（となりの席どうしをつなぐ）
     Monster.js     … 魔物と、強化のデータのチェック
+    Setup.js       … 城の種類・デッキのデータのチェックと、山札1組（Pile）
     visibility.js  … オンラインで、イベントをプレイヤーごとに隠す決まり
   ui/              … 画面表示と入力
     Renderer.js
@@ -106,6 +107,8 @@ data/
   cards.json       … カードの定義
   rules.json       … ルールの数値
   monsters.json    … 魔物の定義（STEP 3）
+  castles.json     … 城の種類（STEP 5）
+  decks.json       … デッキ対戦のデッキ（STEP 5）
   upgrades.json    … コインで買う強化（STEP 3）
 tests/             … 自動テスト（node --test）。Node.js だけで動く
   helpers.js       … data/ と fixtures/ の読み込み、シード付き乱数、イベントの記録
@@ -114,7 +117,10 @@ tests/             … 自動テスト（node --test）。Node.js だけで動�
   sim/             … バランス確認のシミュレーション
     sim.js         … 1試合・何試合も回して数字を集める
     strategies.js  … 戦い方（random / aggro / smart / defensive / guard / pass）
-    run.js         … 表を出すコマンド
+    run.js         … 表を出すコマンド（2人）
+    multi.js       … 2人・4人・8人で、勝利条件と魔法の届く相手を比べる
+    castles.js     … 城の種類・デッキの勝率
+    proposals/     … 案の比べ方（判断待ちの提案用）
 server/            … オンライン対戦のサーバー（Node.js だけ。ロジック担当）
   server.js        … HTTP（合言葉で入る・操作を受ける・SSE で送る）。node server/server.js で起動
   rooms.js         … 部屋と席。Game を動かし、プレイヤーごとに隠して送る
@@ -151,7 +157,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 
 ### 用語
 
-- プレイヤーID：`"p1"`、`"p2"`。先攻は `"p1"`
+- プレイヤーID：`"p1"`〜`"p8"`（人数は `rules.playerCount`）。先攻は `"p1"`
 - カード種類（type）：`cards.json` のキー。例：`"infantry"`
 - カードID（cardId）：山札の1枚1枚につく一意のID。例：`"c07"`。同じ種類のカードでもIDは別
 - 兵士ID（soldierId）：場に出た兵士につく一意のID。例：`"s03"`
@@ -163,7 +169,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 
 | メソッド | 説明 |
 |---|---|
-| `new Game({ cards, rules, rng, monsters, upgrades })` | ゲームを作る。`cards` / `rules` / `monsters` / `upgrades` は `data/` の JSON の中身（Game はファイルを読まない）。`monsters` / `upgrades` は省略でき、省略すると魔物は出ず強化は買えない。`rng` は 0以上1未満を返す乱数で、省略すると `Math.random`。作った時点で初期手札は配られていて、`phase` は `"ready"`。イベントは出さない |
+| `new Game({ cards, rules, rng, monsters, upgrades, castles, decks, setup })` | ゲームを作る。`cards` / `rules` / `monsters` / `upgrades` / `castles` / `decks` は `data/` の JSON の中身（Game はファイルを読まない）。`cards` / `rules` 以外は省略でき、省略すると魔物は出ず・強化は買えず・城の種類はなし。`setup` は席ごとの選択 `{ castles: [...], decks: [...] }`（省略すると `rules.defaultCastle` / `rules.defaultDeck`）。`rng` は 0以上1未満を返す乱数で、省略すると `Math.random`。作った時点で初期手札は配られていて、`phase` は `"ready"`。イベントは出さない |
 | `game.start()` | ゲームを始める。全イベントを `on()` で購読してから呼ぶと、p1 のターン1が始まる（`turnStarted` → ドロー → 進軍） |
 | `game.getState(viewerId)` | 今の状態をただのオブジェクトで返す。`viewerId` の手札は中身まで、相手の手札は枚数だけ入る |
 | `game.canPlayCard(cardId, target)` | そのカードを今出せるかを返す（読むだけで、状態は変わらない）。出せないときは `{ ok: false, reason }`。`playCard` と同じ判定なので、UIは出せない理由を前もって表示できる。`target` を省略して、対象が2つ以上あるときは `{ ok: true, needsTarget: true }` |
@@ -186,7 +192,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 |---|---|
 | `game.debugSetCastleHp(playerId, hp)` | 城HPを変える（1〜その城の上限の整数。後攻の城は上限が高い）。`phase` が `"gameOver"` のときは使えない |
 | `game.debugSetHand(playerId, types)` | 手札をカード種類の並びで作り直す（例：`["infantry", "fireball"]`）。カードIDは新しく振り、元の手札はゲームから消える。`phase` が `"discard"` のときは使えない |
-| `game.debugSetDeck(types)` | 山札をカード種類の並びで作り直す。配列の先頭から順に引かれる。カードIDは新しく振り、元の山札はゲームから消える |
+| `game.debugSetDeck(types, playerId)` | 山札をカード種類の並びで作り直す（`deckMode` が `"own"` のときは `playerId` の山札。省略すると手番の人）。配列の先頭から順に引かれる。カードIDは新しく振り、元の山札はゲームから消える |
 
 - どれも `{ ok: true }` か `{ ok: false, reason }` を返す。イベントは出さないので、呼んだあとは `getState()` を読み直して描き直す
 - `start()` の前に呼べば、開始時の状態を作れる
@@ -196,7 +202,8 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 
 ```js
 {
-  playerOrder: ["p1", "p2"],   // 席順（手番の順）
+  deckMode: "shared",          // "shared"（全員共通の山札）| "own"（1人1つ）
+  playerOrder: ["p1", "p2"],   // 席順（手番の順）。p1〜p8
   round: 2,                    // 周回（席順の最初の人のターンが始まるたびに1増える。start() の前は 0）
   monsters: [{ monsterId: "m01", type: "slime", roadId: "p1-p2", square: 2, hp: 4, maxHp: 4, attack: 1, element: "water", attackIn: 3, reward: 2, castleAttack: 2 }],
   roads: [{ roadId: "p1-p2", players: ["p1", "p2"], length: 5 }],  // 道。length はいつも laneLength
@@ -204,7 +211,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
   currentPlayer: "p1",
   phase: "main",               // "ready"（start() の前）| "main" | "discard" | "gameOver"
   winner: null,                // 決着したら "p1" か "p2"
-  deckCount: 18,
+  deckCount: 18,               // "own" のときは viewer 本人の山札の数（viewer がいなければ null）
   discardCount: 5,
   exhaustedCount: 1,           // 使い切り置き場の枚数（使い切りのカードを使うとここへ行き、山札に戻らない）
   players: {
@@ -219,6 +226,10 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
       drawNextTurn: 1,         // 次のターンに引く枚数
       armor: 0,                // 城壁の残り
       coins: 2,                // コイン（魔物のとどめでもらう）
+      castleType: "standard",  // 城の種類（castles を渡さなければ null）
+      maxHand: 8,              // 手札の上限（城の種類で変わる）
+      deckId: null,            // "own" のときのデッキのID
+      deckCount: null, discardCount: null, exhaustedCount: null,  // "own" のときだけ、その人の山札などの数
       traps: [{ trapId: "t01", roadId: "p1-p2", square: 1, type: "pit" }],  // type は本人にだけ見え、ほかの人には null
       soldiers: [{
         soldierId: "s03", type: "knight", hp: 4, attack: 6, position: 3, roadId: "p1-p2", targetId: "p2",
@@ -249,7 +260,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 |---|---|
 | `turnStarted` | `{ playerId, turn }` |
 | `cardDrawn` | `{ playerId, cardIds }` |
-| `deckShuffled` | `{ deckCount }` |
+| `deckShuffled` | `{ deckCount, playerId }` … `playerId` は、`"own"` のときだれの山札か（`"shared"` なら `null`） |
 | `cardPlayed` | `{ playerId, cardId, type }` … トラップのときは `type` が `null`（相手に種類を見せない。本人は手札で分かる） |
 | `discardRequired` | `{ playerId, count }` … 捨てる必要がある枚数 |
 | `cardDiscarded` | `{ playerId, cardIds }` |
@@ -257,7 +268,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `soldierMoved` | `{ playerId, soldierId, roadId, from, to }` |
 | `soldiersClashed` | `{ attacker: { playerId, soldierId }, defender: { playerId, soldierId }, roadId, square }` … 道の上で兵士同士がぶつかった。`attacker` は進軍中の側。`square` は**攻める側が止まったマス**の道のマス番号（1マス先の相手と戦うときも攻める側のマス） |
 | `soldierDamaged` | `{ playerId, soldierId, amount, hp, cause, blocked }` … `cause` は `"fight"` / `"spell"` / `"poison"` / `"trap"`。`blocked` は盾が受けた量（`amount` は与えようとしたダメージ） |
-| `soldierDestroyed` | `{ playerId, soldierId, reason }` … `reason` は `"killed"` か `"reachedCastle"` |
+| `soldierDestroyed` | `{ playerId, soldierId, reason }` … `reason` は `"killed"` / `"reachedCastle"` / `"eliminated"`（持ち主が抜けた）/ `"roadClosed"`（道がなくなった） |
 | `spellCast` | `{ playerId, type, target, targetKind }` … `target` は効果を受けるプレイヤーIDか魔物IDの**文字列**、`targetKind` は `"player"` か `"monster"`（`playCard` に渡す `target` のオブジェクトとは形が違う）（ファイアボール・サンダーは相手、ヒールは自分） |
 | `castleDamaged` | `{ playerId, amount, blocked, hp, source }` … `playerId` は城の持ち主。`amount` は攻撃力・魔法の値そのまま（`hp` は0未満にならない）。`blocked` は城壁が受けた量（`hp` は城壁で減らしたあとの値）。`source` は `{ kind: "soldier", soldierId }` か `{ kind: "spell", type }` |
 | `castleHealed` | `{ playerId, amount, hp }` … `amount` は実際に増えた量（上限で止まったぶんは含まない） |
@@ -278,7 +289,10 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `coinsChanged` | `{ playerId, delta, coins, reason }` … `reason` は `"reward"` か `"upgrade"` |
 | `upgradeBought` | `{ playerId, upgradeId, cost }` … このあと効果のイベント（`castleHealed` / `cardDrawn` / `soldierBuffed`） |
 | `soldierBuffed` | `{ playerId, soldierId, attack }` … とぎ石で攻撃力が上がった |
-| `gameOver` | `{ winner }` |
+| `playerEliminated` | `{ playerId, by }` … 城が落ちて抜けた（`lastStanding`）。`by` は落とした人 |
+| `roadClosed` | `{ roadId, monsterIds }` … 道がなくなった。その道の魔物（`monsterIds`）も消える |
+| `roadOpened` | `{ roadId, players }` … 抜けた人の両どなりをつなぐ道ができた |
+| `gameOver` | `{ winner, reason }` … `reason` は `"castleDestroyed"` / `"lastStanding"` / `"roundLimit"` |
 
 #### イベントの順番
 
@@ -302,6 +316,8 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   - 毒の霧・氷の息：`spellCast` → 相手の兵士1体ずつ `statusApplied`
   - 武器：`weaponEquipped`／盾：`shieldAdded`／城壁：`castleArmored`／トラップ：`trapSet`
 - ターン終了：手札が上限を超えていたら `discardRequired`。捨てたら `cardDiscarded` → 次の人の `turnStarted` …
+- 周回の上限（`maxRounds`）に来たら、次の周回の `turnStarted` の代わりに `gameOver`（`reason: "roundLimit"`）
+- `lastStanding` で城が落ちたとき：`castleDamaged` → `playerEliminated` → 抜けた人の兵士の `soldierDestroyed`（`"eliminated"`）→ `roadClosed` → その道の兵士の `soldierDestroyed`（`"roadClosed"`）… → `roadOpened` →（残りが1人なら）`gameOver`
 - `gameOver` はいちばん最後に1回だけ出る。そのあとの操作はすべて `{ ok: false }`
 
 ### データの形
@@ -566,7 +582,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 - サーバーは `server/`（Node.js 22.7 以上。**外部パッケージなし**）。Game（`js/game/`）をそのまま動かす。乱数もサーバーだけが持つ
 - 起動：リポジトリのルートで `node server/server.js`（ポートは環境変数 `PORT`、省略すると 8787）。`data/` の JSON はサーバーが読み、間違っていれば起動したときにエラーで止まる
 - **画面のファイル（`index.html`・`css/`・`js/`・`data/`・`assets/`）も同じサーバーが配る**。`http://localhost:8787` を開けば、画面とサーバーが同じ場所なので、画面はつなぎ先を `/api/...` と書くだけでよい
-- オンライン対戦は今は2人だけ（`playerCount` が2でなければ起動しない。STEP 5 で人数を増やす）
+- 人数は `rules.playerCount`（2〜8）。その人数がそろったら始まる。城の種類・デッキは今は全員 `rules.defaultCastle` / `defaultDeck`（部屋で選ぶしくみはまだない）
 - 通信は HTTP だけ（WebSocket は使わない。外部パッケージなしで作れて、ブラウザでもそのまま使えるため）
   - ブラウザ → サーバー：`fetch` で `POST`（JSON）
   - サーバー → ブラウザ：Server-Sent Events（`EventSource` で受け取る）
@@ -618,7 +634,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 ### 人数
 - `rules.playerCount`：2〜8（省略すると2）。席順に `p1`〜`p8`。道は「となりの席どうし」（#16）
 - 席ごとの城ボーナス：`rules.seatCastleBonus`（席ごとの数の配列、省略できる）。省略すると、2人なら `[0, secondPlayerCastleBonus]`、3人以上なら席 i（0から）に `round(secondPlayerCastleBonus × i ÷ (人数−1))`（後ろの席ほど少し多い）
-- 兵士は道でつながった相手（となりの2人）にだけ送れる。ファイアボールなど城への魔法の届く相手は `rules.castleSpellRange`：`"neighbors"`（となりだけ）か `"any"`（誰にでも）。**仮：`"neighbors"`**（シミュレーションで決めた。下）。2人ならどちらも同じ
+- 兵士は道でつながった相手（となりの2人）にだけ送れる。ファイアボールなど城への魔法の届く相手は `rules.castleSpellRange`：`"neighbors"`（となりだけ）か `"any"`（誰にでも）。**仮：`"any"`**（シミュレーションで、4人・8人とも「誰にでも」の方が席ごとの勝率の差が小さく、考える人が勝ちやすく、試合も短かった）。2人ならどちらも同じ
 
 ### 勝利条件（`rules.winCondition`）
 | 値 | 勝ち方 | 城が落ちた人 |
@@ -626,7 +642,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 | `"firstDestroy"`（省略したとき） | **最初にどこかの城を落とした人の勝ち**（2人なら今と同じ） | — |
 | `"lastStanding"` | 最後まで城が残った1人の勝ち | 負けて抜ける（`playerEliminated`）。その人の兵士・トラップは消え、手札は捨て札へ。その人の道はなくなり、両どなりが新しい道でつながる（なくなった道の兵士・魔物も消える） |
 
-- **周回の上限 `rules.maxRounds`**（仮：40。0 なら上限なし）：その周回を全員が終えても決着していなければ、城HPの残りの割合（`castleHp ÷ castleMaxHp`）がいちばん多い人の勝ち。同じなら城HPが多い人、それも同じなら席順が後ろの人（先攻有利をやわらげる）。必ず決着させるため
+- **周回の上限 `rules.maxRounds`**（仮：60。0 なら上限なし。2人の smart 同士で上限まで行くのは約5%）：その周回を全員が終えても決着していなければ、城HPの残りの割合（`castleHp ÷ castleMaxHp`）がいちばん多い人の勝ち。同じなら城HPが多い人、それも同じなら席順が後ろの人（先攻有利をやわらげる）。必ず決着させるため
 - `gameOver` に `reason` を足す：`"castleDestroyed"`（城を落とした）／`"lastStanding"`（最後の1人）／`"roundLimit"`（周回の上限）
 
 ### 城の種類（`data/castles.json`）
@@ -636,12 +652,13 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 | type | 名前 | 長所 | 短所 |
 |---|---|---|---|
 | `standard` | ふつうの城 | — | — |
-| `fortress` | とりで | 城HP+8 | 手札の上限−2 |
-| `tower` | 魔法の塔 | 城への魔法+3 | 城HP−5 |
-| `barracks` | 兵舎 | 出す兵士の攻撃+1 | 城HP−4 |
+| `fortress` | とりで | 城HP+5 | 手札の上限−2 |
+| `tower` | 魔法の塔 | 城への魔法+2 | 城HP−6 |
+| `barracks` | 兵舎 | 出す兵士の攻撃+1 | 城HP−5 |
 
 ### デッキ対戦（`rules.deckMode`）
 - `"shared"`（省略したとき）：今と同じ、全員共通の山札
+- デッキ（仮）：`balanced`（バランス）、`assault`（突撃：騎士と武器が多い）、`fortress`（籠城：歩兵と守りが多い）
 - `"own"`：1人1つずつ山札・捨て札・使い切り置き場を持つ。中身は `data/decks.json` のデッキ（`{ name, cards: { type: 枚数 } }`）。席ごとに選ぶ：`setup: { decks: ["aggro", "control"] }`。省略すると全員 `rules.defaultDeck`
   - `getState()`：`deckMode`。`"own"` のとき、いちばん上の `deckCount` / `discardCount` / `exhaustedCount` は viewer 本人の数（viewer がいなければ `null`）、`players.pX.deckCount` などにそれぞれの数。`"shared"` のときは `players.pX` の方が `null`
   - `deckShuffled` に `playerId`（`"own"` のとき、だれの山札か。`"shared"` のときは `null`）を足す
@@ -762,7 +779,7 @@ STEP 2 以降で追加する。今のSTEPで頼まれていないものは先回
 2. 魔物とコイン：中央に出る魔物（ランダム）、とどめボーナス、コインでの強化（STEP 3 で作った）
 3. 見た目：イラスト、演出、城が壊れていく表現、効果音
 4. オンライン対戦：合言葉で部屋に入る（STEP 4 で作った。上の「STEP 4」）
-5. 拡張：最大8人、デッキ対戦、城の種類、勝利条件の設定画面
+5. 拡張：最大8人、デッキ対戦、城の種類、勝利条件の設定画面（STEP 5 でロジックを作った。設定画面は画面側）
 
 決まっている方針：
 - 防御カードは何枚でも出せる。攻撃は1ターン1枚（付加効果のカードは一緒に出せる）
