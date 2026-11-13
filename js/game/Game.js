@@ -265,7 +265,7 @@ export class Game {
         }
         if (!opponent) break;
         this.fight(player, soldier, enemy, opponent);
-        const keepGoing = this.rules.advanceAfterWin && !soldier.isDead && steps < soldier.speed;
+        const keepGoing = this.rules.advanceAfterWin && opponent.isDead && !soldier.isDead && steps < soldier.speed;
         if (!keepGoing) break;
       }
       if (!reached) continue;

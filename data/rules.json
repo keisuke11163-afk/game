@@ -1,9 +1,11 @@
 {
   "castleMaxHp": 25,
-  "secondPlayerCastleBonus": 2,
+  "secondPlayerCastleBonus": 4,
   "initialHand": 5,
   "drawPerTurn": 1,
   "firstTurnDraw": 1,
   "maxHand": 8,
-  "laneLength": 5
+  "laneLength": 5,
+  "advanceAfterWin": true,
+  "soldierCastleDamageMultiplier": 3
 }

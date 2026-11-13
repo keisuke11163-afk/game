@@ -229,7 +229,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `soldierDamaged` | `{ playerId, soldierId, amount, hp }` |
 | `soldierDestroyed` | `{ playerId, soldierId, reason }` … `reason` は `"killed"` か `"reachedCastle"` |
 | `spellCast` | `{ playerId, type, target }` … `target` は効果を受けるプレイヤーID（ファイアボール・サンダーは相手、ヒールは自分） |
-| `castleDamaged` | `{ playerId, amount, hp, source }` … `playerId` は城の持ち主。`amount` は攻撃力・魔法の値そのまま（`hp` は0未満にならない）。`source` は `{ kind: "soldier", soldierId }` か `{ kind: "spell", type }` |
+| `castleDamaged` | `{ playerId, amount, hp, source }` … `playerId` は城の持ち主。`amount` は与えたダメージ（兵士は攻撃力 × `soldierCastleDamageMultiplier`、魔法は値そのまま）（`hp` は0未満にならない）。`source` は `{ kind: "soldier", soldierId }` か `{ kind: "spell", type }` |
 | `castleHealed` | `{ playerId, amount, hp }` … `amount` は実際に増えた量（上限で止まったぶんは含まない） |
 | `gameOver` | `{ winner }` |
 
@@ -240,6 +240,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   - 進軍：兵士は出した順に1体ずつ動く。城に着いた兵士は `soldierMoved` → `castleDamaged` → `soldierDestroyed`（`"reachedCastle"`）の順に出す
   - 城に着いた兵士の `soldierMoved.to` は `laneLength` にそろえる（5以上に進んでも 5）
   - 兵士同士が戦うとき：`soldierMoved`（止まった位置まで。動かなければ出さない）→ `soldiersClashed` → `soldierDamaged`（守る側）→ `soldierDamaged`（攻める側）→ HPが0以下の兵士の `soldierDestroyed`（`"killed"`）。両方消えるときは**守る側 → 攻める側**の順（`soldierDamaged` と同じ順番）
+  - 戦いで相手だけが消えて進み続けるとき（`advanceAfterWin`）：上の戦いのイベントのあと、続きの `soldierMoved`（さっき止まったマスから）→（また相手に会えば）`soldiersClashed` …、城に着けば `castleDamaged` → `soldierDestroyed`（`"reachedCastle"`）。1体の兵士の `soldierMoved` が1回の進軍で2回以上出ることがある
   - 進軍の途中で城HPが0以下になったら、残りの兵士は動かさずにすぐ `gameOver` を出す
 - カードを出したとき：`cardPlayed` のあと
   - 兵士：`soldierDeployed`
@@ -256,12 +257,14 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 ```json
 {
   "castleMaxHp": 25,
-  "secondPlayerCastleBonus": 2,
+  "secondPlayerCastleBonus": 4,
   "initialHand": 5,
   "drawPerTurn": 1,
   "firstTurnDraw": 1,
   "maxHand": 8,
-  "laneLength": 5
+  "laneLength": 5,
+  "advanceAfterWin": true,
+  "soldierCastleDamageMultiplier": 3
 }
 ```
 
@@ -271,13 +274,15 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 {
   "infantry":  { "name": "歩兵", "kind": "soldier", "hp": 5, "attack": 3, "speed": 2, "count": 10 },
   "knight":    { "name": "騎士", "kind": "soldier", "hp": 4, "attack": 5, "speed": 3, "count": 6 },
-  "fireball":  { "name": "ファイアボール", "kind": "spell", "effect": "damageEnemyCastle", "amount": 8, "count": 6 },
+  "fireball":  { "name": "ファイアボール", "kind": "spell", "effect": "damageEnemyCastle", "amount": 8, "count": 2 },
   "thunder":   { "name": "サンダー", "kind": "spell", "effect": "damageEnemySoldiers", "amount": 3, "count": 6 },
   "heal":      { "name": "ヒール", "kind": "spell", "effect": "healOwnCastle", "amount": 10, "count": 6, "exhaust": true }
 }
 ```
 
 - `secondPlayerCastleBonus`：後攻（p2）の城だけ、HPと上限がこのぶん多い（先攻有利をやわらげるため）。0以上の整数
+- `advanceAfterWin`：`true` なら、戦いで相手だけが消えたとき、残りの歩数で進み続ける（`false` ならそのターンはその場で止まる）。省略すると `false`
+- `soldierCastleDamageMultiplier`：城に着いた兵士が与えるダメージ ＝ 攻撃力 × この値（1以上の整数）。省略すると 1
 - `firstTurnDraw`：先攻の最初のターンに引く枚数（2ターン目以降と後攻は `drawPerTurn`）
 - `exhaust`：`true` のカードは使い切り。使うと使い切り置き場へ行き、山札に戻らない。省略すると `false`。手札の上限で捨てたときは、ふつうに捨て札置き場へ行く（山札に戻る）
 - カードの説明文は UI が `kind` / `effect` と数値から組み立てる。カードに `description` を書けば、そちらを優先する（Game は `description` を使わない）
@@ -286,7 +291,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 
 STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて仮（`data/` で調整する）。
 
-- 城HP：25（上限も25）。後攻（p2）の城は 27 で始まる（上限も27）
+- 城HP：25（上限も25）。後攻（p2）の城は 29 で始まる（上限も29）
 - 山札：2人共通。シャッフルして使う。使ったカードと捨てたカードは捨て札置き場へ
   - 兵士カードも、出した時点で捨て札置き場へ行く（場の兵士とは別に扱う）
   - 使い切りのカード（ヒール）は、使ったら使い切り置き場へ行き、二度と山札に戻らない。手札の上限で捨てたときは捨て札置き場へ行く（山札に戻る）
@@ -295,7 +300,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 - 先攻は p1。先攻の最初のターンも1枚引く
 - ターンの流れ
   1. ドロー：1枚引く
-  2. 進軍：自分の兵士が出した順に1体ずつ前に進む。相手の兵士とぶつかったら戦う。相手の城に着いた兵士は、攻撃力ぶんのダメージを与えて消える
+  2. 進軍：自分の兵士が出した順に1体ずつ前に進む。相手の兵士とぶつかったら戦う。相手の城に着いた兵士は、攻撃力の3倍（`soldierCastleDamageMultiplier`）のダメージを与えて消える
   3. メイン：カードを1枚出す（出さなくてもよい）
      - 出しても何も起きないカードは出せない（道の上に相手の兵士がいないときのサンダー、城HPが満タンのときのヒール）
   4. ターン終了：手札が8枚を超えていたら、本人が選んで8枚になるまで捨てる
@@ -309,7 +314,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
   - 進軍は1マスずつ進める。進む前と、1マス進むごとに、**同じマスか1つ先のマス**に相手の兵士がいないか確かめる。いたら、そこで止まって戦う
   - 戦う相手が何体かいるときは、先に出された兵士と戦う
   - 戦い：お互いに攻撃力ぶんのダメージを同時に与える。HPが0以下になった兵士は消える
-  - 相手だけが消えても、そのターンはその場で止まる（続きは次の進軍で）。両方とも生き残ったら、次の進軍でもう一度戦う
+  - 相手だけが消えたら、残りの歩数で進み続ける（`advanceAfterWin`）。その先でまた相手に会えば、同じターンにもう一度戦う。両方とも生き残ったら、そのターンはその場で止まり、次の進軍でもう一度戦う
   - 戦いは進軍している側のターンにだけ起きる
 - 真ん中のマス（道のマス番号2）は、STEP 3 で魔物が出る場所。STEP 1 では普通のマスとして通れる
   - STEP 3 の予定：魔物がいる間、兵士は真ん中のマスの手前で止まって魔物を攻撃する。倒すまで先へは進めない
@@ -321,9 +326,9 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 
 | 名前 | 種類 | 効果 | 枚数 |
 |---|---|---|---|
-| 歩兵 | 兵士 | HP5・攻撃3・1ターンに2マス進む（遅いけど打たれ強い。サンダーに耐える） | 10 |
-| 騎士 | 兵士 | HP4・攻撃5・1ターンに3マス進む（速くて強いけど、歩兵より打たれ弱い） | 6 |
-| ファイアボール | 魔法 | 相手の城に8ダメージ | 6 |
+| 歩兵 | 兵士 | HP5・攻撃3（城には9）・1ターンに2マス進む（遅いけど打たれ強い。サンダーに耐える） | 10 |
+| 騎士 | 兵士 | HP4・攻撃5（城には15）・1ターンに3マス進む（速くて強いけど、歩兵より打たれ弱い） | 6 |
+| ファイアボール | 魔法 | 相手の城に8ダメージ（すぐ効いて防げないので、枚数を少なくしている） | 2 |
 | サンダー | 魔法 | 道の上にいる相手の兵士全員に3ダメージ | 6 |
 | ヒール | 魔法 | 自分の城HP+10（上限はその城の上限）。**使い切り** | 6 |
 

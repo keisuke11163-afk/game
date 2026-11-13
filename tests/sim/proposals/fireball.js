@@ -1,7 +1,7 @@
 // 「ファイアボール頼みの問題」の案を比べる（各1000試合）。
 //   node tests/sim/proposals/fireball.js [--games 1000]
-// 案ごとに、rules.json / cards.json の一部だけを上書きして回す（data/ は書き換えない）。
-import { loadJson } from '../../helpers.js';
+// 案ごとに、#12 の数値（tests/fixtures/）の一部だけを上書きして回す。
+import { buildData } from '../../helpers.js';
 import { runMany } from '../sim.js';
 
 const args = process.argv.slice(2);
@@ -38,11 +38,9 @@ export const PROPOSALS = {
   'A+B3+C2(2枚)+城22+後攻+4': { rules: { advanceAfterWin: true, soldierCastleDamageMultiplier: 3, castleMaxHp: 22, secondPlayerCastleBonus: 4 }, cards: { fireball: { count: 2 } } },
 };
 
+// 比べる元は、この案を入れる前の数値（tests/fixtures/ = #12 の数値）。data/ は案を入れたあとの値なので使わない
 export function dataFor(p) {
-  const rules = { ...loadJson('rules.json'), ...(p.rules || {}) };
-  const cards = loadJson('cards.json');
-  for (const [k, v] of Object.entries(p.cards || {})) cards[k] = { ...cards[k], ...v };
-  return { rules, cards };
+  return buildData({ rules: p.rules || {}, cards: p.cards || {}, source: 'fixture' });
 }
 
 const SAME = ['random', 'aggro', 'smart', 'defensive', 'guard'];
