@@ -1,5 +1,7 @@
-// 場に出た兵士1体。自分のレーンを相手の城に向かって進む。
-// position: 0 = 自分の城の前（出した直後）。laneLength 以上になったら相手の城に着く。
+// 場に出た兵士1体。1本の道を相手の城に向かって進む。
+// position: 自分の城から数えたマス。0 = 自分の城の前（出した直後）、laneLength - 1 = 相手の城の前。
+// laneLength 以上になったら相手の城に着く。
+// 1マスずつ進める（相手の兵士とぶつかるかは Game が1マスごとに確かめる）。
 
 export class Soldier {
   /**
@@ -15,11 +17,9 @@ export class Soldier {
     this.position = 0;
   }
 
-  /** speed ぶん進む。移動前と移動後の位置を返す */
-  advance() {
-    const from = this.position;
-    this.position = from + this.speed;
-    return { from, to: this.position };
+  /** 1マス進む */
+  moveForward() {
+    this.position += 1;
   }
 
   hasReachedCastle(laneLength) {
