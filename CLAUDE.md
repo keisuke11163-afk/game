@@ -97,6 +97,7 @@ js/
     Soldier.js
     Road.js        … 道（となりの席どうしをつなぐ）
     Monster.js     … 魔物と、強化のデータのチェック
+    visibility.js  … オンラインで、イベントをプレイヤーごとに隠す決まり
   ui/              … 画面表示と入力
     Renderer.js
     HandView.js
@@ -114,6 +115,9 @@ tests/             … 自動テスト（node --test）。Node.js だけで動�
     sim.js         … 1試合・何試合も回して数字を集める
     strategies.js  … 戦い方（random / aggro / smart / defensive / guard / pass）
     run.js         … 表を出すコマンド
+server/            … オンライン対戦のサーバー（Node.js だけ。ロジック担当）
+  server.js        … HTTP（合言葉で入る・操作を受ける・SSE で送る）。node server/server.js で起動
+  rooms.js         … 部屋と席。Game を動かし、プレイヤーごとに隠して送る
 assets/            … 画像素材（UI担当）
   STYLE.md         … 絵柄の決まりと、画像生成AIに使う共通の指示文
   CREDITS.md       … 素材ごとの出どころとライセンス
