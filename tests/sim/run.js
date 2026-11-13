@@ -1,0 +1,53 @@
+// バランス確認のシミュレーションを回して表を出す。
+//   node tests/sim/run.js                       … 決まった組み合わせを各1000試合
+//   node tests/sim/run.js --games 200 --seed 7  … 試合数とシードを変える
+//   node tests/sim/run.js --match smart,random  … 1つの組み合わせだけ
+//   node tests/sim/run.js --rules '{"castleMaxHp":30}' --cards '{"fireball":{"count":3}}'
+//       … data/ の値を一部だけ上書きして試す（cards はカードごとに中身をまぜる）
+//   node tests/sim/run.js --json                … 結果を JSON で出す
+// 同じ引数なら、誰が回しても同じ結果になる。
+import { loadJson } from '../helpers.js';
+import { runMany } from './sim.js';
+
+const args = process.argv.slice(2);
+const opt = (name, def) => {
+  const i = args.indexOf(`--${name}`);
+  return i === -1 ? def : args[i + 1];
+};
+const games = Number(opt('games', 1000));
+const seed = Number(opt('seed', 1));
+const rulesPatch = JSON.parse(opt('rules', '{}'));
+const cardsPatch = JSON.parse(opt('cards', '{}'));
+
+export function buildData(rulesPatchArg = {}, cardsPatchArg = {}) {
+  const rules = { ...loadJson('rules.json'), ...rulesPatchArg };
+  const cards = loadJson('cards.json');
+  for (const [k, v] of Object.entries(cardsPatchArg)) {
+    if (v === null) delete cards[k];
+    else cards[k] = { ...(cards[k] || {}), ...v };
+  }
+  return { rules, cards };
+}
+
+const DEFAULT_MATCHES = [
+  'random,random', 'aggro,aggro', 'smart,smart', 'defensive,defensive', 'guard,guard',
+  'defensive,aggro', 'aggro,defensive', 'random,smart', 'smart,random', 'random,pass',
+];
+
+const matches = opt('match', null) ? [opt('match')] : DEFAULT_MATCHES;
+const { rules, cards } = buildData(rulesPatch, cardsPatch);
+const rows = matches.map((m) => runMany({ games, seed, cards, rules, strategies: m.split(',') }));
+
+if (args.includes('--json')) {
+  console.log(JSON.stringify(rows, null, 2));
+} else {
+  const pct = (x) => `${Math.round(x * 100)}%`;
+  console.log(`試合数 ${games}・シード ${seed}`);
+  console.log('| 組み合わせ | 決着 | 平均手番（中央値・最大） | p1 の勝率 | 兵士からの城ダメージ | 戦い/試合 | 捨てる場面 | 迷う場面 |');
+  console.log('|---|---|---|---|---|---|---|---|');
+  for (const r of rows) {
+    console.log(
+      `| ${r.strategies.join(' vs ')} | ${r.decided}/${r.games} | ${r.avgTurns?.toFixed(1)}（${r.medianTurns}・${r.maxTurns}） | ${pct(r.winRate.p1 || 0)} | ${pct(r.soldierDamageShare)} | ${r.clashesPerGame.toFixed(1)} | ${pct(r.discardRate)} | ${pct(r.choiceRate)} |`,
+    );
+  }
+}
