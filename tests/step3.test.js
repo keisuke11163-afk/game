@@ -8,7 +8,7 @@ const MONSTERS = {
   slime: { name: 'スライム', hp: 4, attack: 1, element: 'water', reward: 2, castleAttack: 2, attackEvery: 2, weight: 1 },
 };
 const UPGRADES = {
-  repair: { name: '修理', effect: 'repairCastle', amount: 6, cost: 3 },
+  repair: { name: '修理', effect: 'repairCastle', amount: 6, cost: 3, limit: 1 },
   recruit: { name: '補充', effect: 'drawCards', amount: 1, cost: 2 },
   sharpen: { name: 'とぎ石', effect: 'sharpenSoldiers', amount: 1, cost: 4 },
 };
@@ -148,7 +148,7 @@ test('強化：コインが足りないと買えない。買うとコインが�
 
 test('強化は自分の番のメインの場面だけ', () => {
   const { game } = setup({ start: false });
-  assert.equal(game.canBuyUpgrade('recruit').reason, '今は買えません');
+  assert.equal(game.canBuyUpgrade('recruit').reason, 'ゲームがまだ始まっていません');
 });
 
 test('monsters.json / upgrades.json / rules の間違いは例外', () => {
@@ -157,4 +157,56 @@ test('monsters.json / upgrades.json / rules の間違いは例外', () => {
   assert.throws(() => new Game({ cards, rules, monsters: { x: { name: 'x', hp: 0 } } }), /"x"/);
   assert.throws(() => new Game({ cards, rules, upgrades: { x: { name: 'x', effect: 'boom', cost: 1, amount: 1 } } }), /effect/);
   assert.throws(() => new Game({ cards, rules: { ...rules, monsterSpawnChance: 2 } }), /monsterSpawnChance/);
+});
+
+test('強化："constructor" などプロトタイプのキーは強化として扱わない。limit 回まで', () => {
+  const { game } = setup();
+  game.players.p1.coins = 20;
+  for (const id of ['constructor', 'toString', '__proto__', 5]) {
+    assert.equal(game.buyUpgrade(id).reason, 'その強化はありません');
+  }
+  assert.equal(game.getState('p1').players.p1.coins, 20);
+  game.debugSetCastleHp('p1', 10);
+  assert.equal(game.buyUpgrade('repair').ok, true);
+  assert.equal(game.canBuyUpgrade('repair').reason, 'この強化は1試合に1回までです');
+});
+
+test('兵士と魔物が両方倒れるとき：monsterDefeated → coinsChanged → soldierDestroyed', () => {
+  const monsters = { ogre: { name: 'オーガ', hp: 5, attack: 9, reward: 4, castleAttack: 1, attackEvery: 9, weight: 1 } };
+  const { game, log } = setup({ p1: ['knight'], monsters });
+  play(game, 'knight');
+  game.endTurn(); game.endTurn();
+  const i = log.findIndex((e) => e.event === 'monsterDefeated');
+  assert.deepEqual(events(log).slice(i, i + 3), ['monsterDefeated', 'coinsChanged', 'soldierDestroyed']);
+});
+
+test('魔物を倒した道には monsterCooldownRounds のあいだ出ない。state に reward と castleAttack', () => {
+  const { game, log } = setup({ p1: ['fireball'], rules: { monsterCooldownRounds: 2 } });
+  const m = game.getState(null).monsters[0];
+  assert.deepEqual([m.reward, m.castleAttack], [2, 2]);
+  play(game, 'fireball', { monsterId: 'm01' });
+  assert.equal(log.find((e) => e.event === 'spellCast').targetKind, 'monster');
+  for (let i = 0; i < 4; i++) game.endTurn(); // 2周目・3周目は出ない
+  assert.equal(log.filter((e) => e.event === 'monsterAppeared').length, 1);
+  game.endTurn(); game.endTurn(); // 4周目に出る
+  assert.equal(log.filter((e) => e.event === 'monsterAppeared').length, 2);
+});
+
+test('monsterSpawnChance が 0 なら、魔物を渡しても山札の並びは変わらない（乱数を使わない）', () => {
+  const cards = loadFixture('cards-step2.json');
+  const rules = { ...loadFixture('rules.json'), monsterFirstRound: 1, monsterSpawnChance: 0 };
+  const play10 = (opts) => {
+    const g = new Game({ cards, rules, rng: seededRng(4), ...opts });
+    const log = recordEvents(g, ['cardDrawn']);
+    g.start();
+    for (let i = 0; i < 10; i++) g.endTurn();
+    return JSON.stringify(log);
+  };
+  assert.equal(play10({}), play10({ monsters: MONSTERS }));
+});
+
+test('魔物を使うとき laneLength が偶数なら例外', () => {
+  const cards = loadFixture('cards-step2.json');
+  const rules = { ...loadFixture('rules.json'), laneLength: 6 };
+  assert.throws(() => new Game({ cards, rules, monsters: MONSTERS }), /laneLength/);
 });

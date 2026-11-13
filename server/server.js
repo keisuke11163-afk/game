@@ -6,6 +6,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Lobby } from './rooms.js';
+import { Game } from '../js/game/Game.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -21,12 +22,14 @@ function readJson(req) {
   return new Promise((resolve) => {
     let size = 0;
     const chunks = [];
+    let tooLarge = false;
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BODY) req.destroy();
+      if (size > MAX_BODY) tooLarge = true;
       else chunks.push(c);
     });
     req.on('end', () => {
+      if (tooLarge) return resolve({ tooLarge: true });
       try {
         resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'));
       } catch {
@@ -35,6 +38,23 @@ function readJson(req) {
     });
     req.on('error', () => resolve(null));
   });
+}
+
+const STATIC_TYPES = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg',
+};
+const STATIC_DIRS = ['/index.html', '/css/', '/js/', '/data/', '/assets/'];
+
+/** 画面のファイルも同じサーバーから配る（同じオリジンになるので、画面はつなぎ先を知らなくてよい） */
+function serveStatic(pathname, res) {
+  const path = pathname === '/' ? '/index.html' : decodeURIComponent(pathname);
+  const allowed = STATIC_DIRS.some((d) => path === d || path.startsWith(d)) && !path.includes('..') && !path.includes('\0');
+  const ext = path.slice(path.lastIndexOf('.'));
+  const file = join(ROOT, path);
+  if (!allowed || !STATIC_TYPES[ext] || !existsSync(file)) return sendJson(res, 404, { ok: false, reason: 'ありません' });
+  res.writeHead(200, { 'Content-Type': STATIC_TYPES[ext], 'Cache-Control': 'no-store' });
+  res.end(readFileSync(file));
 }
 
 function sendJson(res, status, body) {
@@ -52,11 +72,26 @@ function sendJson(res, status, body) {
  * @param {() => () => number} [o.makeRng] 試合ごとの乱数を作る関数（テストでシードを固定するため）
  */
 export function createGameServer({ data = loadData(), makeRng = () => Math.random } = {}) {
+  // data/ が間違っていたら、起動したときに分かるようにする（試合が始まってから落ちないように）
+  new Game({ ...data, rng: makeRng() });
+  if ((data.rules.playerCount ?? 2) !== 2) throw new Error('オンライン対戦は今は2人だけです（rules.json の playerCount）');
   const lobby = new Lobby(data, makeRng);
   const sweeper = setInterval(() => lobby.sweep(30 * 60 * 1000), 60 * 1000);
   sweeper.unref();
 
   const server = createServer(async (req, res) => {
+    try {
+      await handle(req, res);
+    } catch (err) {
+      // 1つのリクエストのエラーでサーバー全体が止まらないように
+      console.error(err);
+      if (!res.headersSent) sendJson(res, 500, { ok: false, reason: 'サーバーでエラーが起きました' });
+      else res.end();
+    }
+  });
+
+  async function handle(req, res) {
+    if (typeof req.url !== 'string' || !req.url.startsWith('/')) return sendJson(res, 400, { ok: false, reason: 'URL が正しくありません' });
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
@@ -68,12 +103,14 @@ export function createGameServer({ data = loadData(), makeRng = () => Math.rando
     }
     if (req.method === 'POST' && url.pathname === '/api/join') {
       const body = await readJson(req);
-      if (!body) return sendJson(res, 400, { ok: false, reason: 'JSON で送ってください' });
+      if (body?.tooLarge) return sendJson(res, 413, { ok: false, reason: '送る内容が大きすぎます' });
+      if (!body || typeof body !== 'object') return sendJson(res, 400, { ok: false, reason: 'JSON で送ってください' });
       return sendJson(res, 200, lobby.join(body.passphrase, body.name));
     }
     if (req.method === 'POST' && url.pathname === '/api/action') {
       const body = await readJson(req);
-      if (!body) return sendJson(res, 400, { ok: false, reason: 'JSON で送ってください' });
+      if (body?.tooLarge) return sendJson(res, 413, { ok: false, reason: '送る内容が大きすぎます' });
+      if (!body || typeof body !== 'object') return sendJson(res, 400, { ok: false, reason: 'JSON で送ってください' });
       const found = lobby.findSeat(body.token);
       if (!found) return sendJson(res, 403, { ok: false, reason: '部屋に入っていません（合言葉から入り直してください）' });
       return sendJson(res, 200, found.room.action(found.seat, body.method, body.args ?? []));
@@ -88,7 +125,11 @@ export function createGameServer({ data = loadData(), makeRng = () => Math.rando
         'Access-Control-Allow-Origin': '*',
       });
       res.write(': connected\n\n');
-      const client = (msg) => res.write(`data: ${JSON.stringify(msg)}\n\n`);
+      const client = (msg) => {
+        // 読まないクライアントのぶんがたまり続けないように、たまりすぎたら閉じる（EventSource はつなぎ直す）
+        if (res.writableLength > 1024 * 1024) return res.destroy();
+        res.write(`data: ${JSON.stringify(msg)}\n\n`);
+      };
       const disconnect = found.room.connect(found.seat, client);
       const ping = setInterval(() => res.write(': ping\n\n'), 25000);
       req.on('close', () => {
@@ -97,8 +138,9 @@ export function createGameServer({ data = loadData(), makeRng = () => Math.rando
       });
       return undefined;
     }
+    if (req.method === 'GET') return serveStatic(url.pathname, res);
     return sendJson(res, 404, { ok: false, reason: 'ありません' });
-  });
+  }
   server.lobby = lobby;
   server.on('close', () => clearInterval(sweeper));
   return server;

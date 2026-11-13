@@ -5,6 +5,7 @@ import { Game, EVENT_TYPES } from '../js/game/Game.js';
 import { filterEventFor } from '../js/game/visibility.js';
 
 const ACTIONS = ['playCard', 'discard', 'endTurn', 'buyUpgrade', 'rematch'];
+const MAX_ROOMS = 1000;
 
 export class Room {
   /**
@@ -37,6 +38,7 @@ export class Room {
       clients: new Set(),
     };
     this.seats.push(seat);
+    this.lastActive = Date.now();
     this.broadcastRoom();
     if (this.seats.length === this.capacity) this.startGame();
     return { ok: true, roomId: this.roomId, playerId: seat.playerId, token: seat.token };
@@ -47,8 +49,7 @@ export class Room {
   }
 
   startGame() {
-    const { cards, rules, monsters, upgrades } = this.data;
-    this.game = new Game({ cards, rules, rng: this.makeRng(), monsters, upgrades });
+    this.game = new Game({ ...this.data, rng: this.makeRng() });
     this.rematchVotes.clear();
     for (const type of EVENT_TYPES) {
       this.game.on(type, (payload) => {
@@ -56,15 +57,20 @@ export class Room {
       });
     }
     this.game.start();
+    this.broadcastRoom(); // もう1回の投票を空に戻したことも知らせる
     this.broadcastState();
   }
 
   /** つないだとき：部屋と状態を送る */
   connect(seat, client) {
+    this.lastActive = Date.now();
+    // 1つの席の接続は3本まで（古いものから閉じる扱いにして数えない）
+    if (seat.clients.size >= 3) seat.clients.delete(seat.clients.values().next().value);
     seat.clients.add(client);
     this.broadcastRoom();
     if (this.game) client({ type: 'state', ...this.stateFor(seat.playerId) });
     return () => {
+      this.lastActive = Date.now();
       seat.clients.delete(client);
       this.broadcastRoom();
     };
@@ -73,12 +79,23 @@ export class Room {
   /** ブラウザからの操作 */
   action(seat, method, args) {
     this.lastActive = Date.now();
-    if (!ACTIONS.includes(method)) return { ok: false, reason: `"${method}" という操作はありません` };
+    if (typeof method !== 'string' || !ACTIONS.includes(method)) return { ok: false, reason: `"${method}" という操作はありません` };
     if (!Array.isArray(args)) return { ok: false, reason: 'args は配列で送ってください' };
     if (method === 'rematch') return this.voteRematch(seat);
     if (!this.game) return { ok: false, reason: 'まだ全員そろっていません' };
     if (this.game.currentPlayer !== seat.playerId) return { ok: false, reason: 'あなたの番ではありません' };
-    const result = this.game[method](...args);
+    // 手札にないカードは、相手の手札にあってもなくても同じ文にする（文の違いから相手の手札が分からないように）
+    if (method === 'playCard') {
+      const hand = this.game.getState(seat.playerId).players[seat.playerId].hand || [];
+      if (!hand.some((c) => c.cardId === args[0])) return { ok: false, reason: 'そのカードは手札にありません' };
+    }
+    let result;
+    try {
+      result = this.game[method](...args);
+    } catch (err) {
+      console.error(err);
+      result = { ok: false, reason: '操作の形が正しくありません' };
+    }
     this.broadcastState();
     return result;
   }
@@ -151,6 +168,12 @@ export class Lobby {
     }
     const key = passphrase.trim();
     let room = this.rooms.get(key);
+    // 始まる前に全員が帰ってしまった部屋（30秒以上だれもつないでいない）は作り直す
+    if (room && !room.started && room.seats.every((s) => s.clients.size === 0) && Date.now() - room.lastActive > 30 * 1000) {
+      this.rooms.delete(key);
+      room = null;
+    }
+    if (!room && this.rooms.size >= MAX_ROOMS) return { ok: false, reason: '部屋がいっぱいです。しばらくしてから入り直してください' };
     // 満員で試合が終わっていない部屋には入れない。試合が終わって誰もつないでいない部屋は作り直す
     if (room && room.started && room.game.phase === 'gameOver' && room.seats.every((s) => s.clients.size === 0)) {
       this.rooms.delete(key);

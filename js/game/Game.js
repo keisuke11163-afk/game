@@ -87,6 +87,7 @@ const OPTIONAL_RULES = {
   trapMaxPosition: 1, // トラップを置ける、自分の城から数えた位置の上限
   drawPerCardUsed: 0, // 次のターンに引く枚数 = max(drawPerTurn, 使った枚数 × これ)
   monsterFirstRound: 3, // 魔物が出はじめる周回
+  monsterCooldownRounds: 0, // 魔物を倒した道に、次の魔物が出ない周回の数
   maxRounds: 0, // 周回の上限（0 なら上限なし）
 };
 /** 文字列で選ぶ項目と、選べる値（最初の値が省略したときの値） */
@@ -119,7 +120,10 @@ export class Game {
     Card.validateDefinitions(cards);
     Game.validateRules(rules);
     if (typeof rng !== 'function') throw new Error('rng は 0以上1未満の数を返す関数にしてください');
-    if (monsters !== null) Monster.validateDefinitions(monsters, ELEMENTS);
+    if (monsters !== null) {
+      Monster.validateDefinitions(monsters, ELEMENTS);
+      if (rules.laneLength % 2 === 0) throw new Error('魔物を使うときは、真ん中のマスがひとつに決まるよう rules.json の laneLength を奇数にしてください');
+    }
     if (upgrades !== null) validateUpgrades(upgrades);
     if (castles !== null) validateCastles(castles);
     if (decks !== null) validateDecks(decks, cards);
@@ -144,6 +148,8 @@ export class Game {
     this.nextMonsterNumber = 1;
     /** @type {Monster[]} */
     this.monsters = [];
+    /** 道ID → この周回より前には魔物が出ない */
+    this.monsterCooldown = new Map();
     this.round = 0;
     /** @type {Map<string, Set<Function>>} */
     this.listeners = new Map(EVENT_TYPES.map((type) => [type, new Set()]));
@@ -261,8 +267,7 @@ export class Game {
         throw new Error(`rules.json の ${key} は 0 以上 1 以下の数にしてください`);
       }
     }
-    if (rules.trapMaxPosition !== undefined && Number.isInteger(rules.laneLength)
-      && rules.trapMaxPosition >= Math.floor(rules.laneLength / 2)) {
+    if (Number.isInteger(rules.laneLength) && (rules.trapMaxPosition ?? OPTIONAL_RULES.trapMaxPosition) >= Math.floor(rules.laneLength / 2)) {
       throw new Error('rules.json の trapMaxPosition は、真ん中のマスより手前（laneLength の半分より小さい）にしてください');
     }
     for (const [key, min] of Object.entries(RULE_KEYS)) {
@@ -649,11 +654,13 @@ export class Game {
 
   /** 周回の始め：魔物がいない道ごとに、monsterSpawnChance の確率で1体出る */
   spawnMonsters() {
-    if (!this.monsterDefs || this.round < this.rules.monsterFirstRound) return;
+    if (!this.monsterDefs || this.round < this.rules.monsterFirstRound || this.rules.monsterSpawnChance === 0) return;
     const types = Object.keys(this.monsterDefs);
     if (types.length === 0) return;
     for (const road of this.roads) {
       if (this.monsters.some((m) => m.roadId === road.roadId)) continue;
+      // 魔物を倒した道には、しばらく出ない（魔物が道をふさぎ続けないように）
+      if ((this.monsterCooldown.get(road.roadId) ?? 0) > this.round) continue;
       if (this.rng() >= this.rules.monsterSpawnChance) continue;
       const total = types.reduce((a, t) => a + this.monsterDefs[t].weight, 0);
       let r = this.rng() * total;
@@ -676,6 +683,7 @@ export class Game {
   defeatMonsterIfDead(monster, playerId) {
     if (!monster.isDead) return;
     this.monsters = this.monsters.filter((m) => m !== monster);
+    this.monsterCooldown.set(monster.roadId, this.round + this.rules.monsterCooldownRounds + 1);
     const reward = monster.def.reward;
     this.emit('monsterDefeated', { monsterId: monster.monsterId, playerId, reward });
     this.changeCoins(this.players[playerId], reward, 'reward');
@@ -710,10 +718,15 @@ export class Game {
 
   /** 強化を買えるか（読むだけ） */
   canBuyUpgrade(upgradeId) {
-    if (this.phase !== 'main') return fail(this.phase === 'gameOver' ? 'ゲームは終わっています' : '今は買えません');
+    if (this.phase === 'ready') return fail('ゲームがまだ始まっていません');
+    if (this.phase === 'gameOver') return fail('ゲームは終わっています');
+    if (this.phase !== 'main') return fail('今は買えません');
+    // Object のプロトタイプのキー（"constructor" など）を強化と取り違えないように
+    if (typeof upgradeId !== 'string' || !Object.hasOwn(this.upgradeDefs, upgradeId)) return fail('その強化はありません');
     const def = this.upgradeDefs[upgradeId];
-    if (!def) return fail('その強化はありません');
     const player = this.players[this.currentPlayer];
+    const bought = player.upgradesBought[upgradeId] ?? 0;
+    if (def.limit !== undefined && bought >= def.limit) return fail(`この強化は1試合に${def.limit}回までです`);
     if (player.coins < def.cost) return fail(`コインが足りません（あと${def.cost - player.coins}枚）`);
     if (def.effect === 'repairCastle' && player.castle.isFull) return fail('城のHPが満タンです');
     const pile = this.pileOf(player.id);
@@ -728,6 +741,7 @@ export class Game {
     if (!check.ok) return check;
     const def = this.upgradeDefs[upgradeId];
     const player = this.players[this.currentPlayer];
+    player.upgradesBought[upgradeId] = (player.upgradesBought[upgradeId] ?? 0) + 1;
     this.changeCoins(player, -def.cost, 'upgrade');
     this.emit('upgradeBought', { playerId: player.id, upgradeId, cost: def.cost });
     if (def.effect === 'repairCastle') {
@@ -817,7 +831,8 @@ export class Game {
         return {
           targets: [
             ...playerTargets(this.rules.castleSpellRange === 'neighbors' ? this.neighborsOf(player.id) : this.opponentsOf(player.id)),
-            ...this.monsters.map((m) => ({ monsterId: m.monsterId })),
+            // 魔物は、自分の道（自分が両はしのどちらか）にいるものだけ
+            ...this.monsters.filter((m) => this.findRoad(m.roadId).has(player.id)).map((m) => ({ monsterId: m.monsterId })),
           ],
           reason: '相手がいません',
         };
@@ -955,7 +970,7 @@ export class Game {
       });
     } else if (card.isSpell && resolved.target.monsterId) {
       const monster = this.findMonster(resolved.target.monsterId);
-      this.emit('spellCast', { playerId: player.id, type: card.type, target: monster.monsterId });
+      this.emit('spellCast', { playerId: player.id, type: card.type, target: monster.monsterId, targetKind: 'monster' });
       this.damageMonster(monster, card.def.amount, { playerId: player.id, type: card.type });
       this.defeatMonsterIfDead(monster, player.id);
     } else if (card.isSpell) {
@@ -974,19 +989,19 @@ export class Game {
 
     switch (effect) {
       case 'damageEnemyCastle':
-        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id });
+        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id, targetKind: 'player' });
         // 魔法の塔は城への魔法が強い
         this.damageCastle(enemy, amount + (player.castleDef.castleSpellBonus ?? 0), { kind: 'spell', type: card.type });
         break;
 
       case 'damageEnemySoldiers':
-        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id });
+        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id, targetKind: 'player' });
         for (const soldier of [...enemy.soldiers]) this.damageSoldier(enemy, soldier, amount, 'spell');
         break;
 
       case 'poisonEnemySoldiers':
       case 'freezeEnemySoldiers': {
-        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id });
+        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id, targetKind: 'player' });
         const status = effect === 'poisonEnemySoldiers' ? 'poison' : 'frozen';
         for (const soldier of enemy.soldiers) {
           // 重ねがけでは増えない：残りの回数を長い方にそろえる
@@ -1003,7 +1018,7 @@ export class Game {
       }
 
       case 'healOwnCastle': {
-        this.emit('spellCast', { playerId: player.id, type: card.type, target: player.id });
+        this.emit('spellCast', { playerId: player.id, type: card.type, target: player.id, targetKind: 'player' });
         const healed = player.castle.heal(amount);
         this.emit('castleHealed', { playerId: player.id, amount: healed, hp: player.castle.hp });
         break;
