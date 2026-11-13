@@ -28,6 +28,8 @@ export class Player {
     this.traps = [];
     /** コイン（魔物のとどめでもらう） */
     this.coins = 0;
+    /** 強化ID → 買った回数 */
+    this.upgradesBought = {};
   }
 
   findInHand(cardId) {

@@ -1,5 +1,5 @@
 {
-  "repair":  { "name": "修理", "effect": "repairCastle", "amount": 6, "cost": 3 },
+  "repair":  { "name": "修理", "effect": "repairCastle", "amount": 6, "cost": 3, "limit": 2 },
   "recruit": { "name": "補充", "effect": "drawCards", "amount": 1, "cost": 2 },
-  "sharpen": { "name": "とぎ石", "effect": "sharpenSoldiers", "amount": 1, "cost": 4 }
+  "sharpen": { "name": "とぎ石", "effect": "sharpenSoldiers", "amount": 1, "cost": 4, "limit": 3 }
 }
