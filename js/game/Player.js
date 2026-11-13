@@ -17,6 +17,14 @@ export class Player {
     this.playedThisTurn = false;
     /** 負けて抜けたか（3人以上のとき） */
     this.eliminated = false;
+    /** このターンに出したカードの枚数（メイン・付加・防御すべて） */
+    this.cardsPlayedThisTurn = 0;
+    /** 次のターンに引く枚数 */
+    this.drawNextTurn = 0;
+    /** 城壁の残り。次の自分のターンの始めに消える */
+    this.armor = 0;
+    /** 伏せたトラップ [{ trapId, roadId, square, type }]（square は道のマス番号） */
+    this.traps = [];
   }
 
   findInHand(cardId) {
@@ -35,13 +43,17 @@ export class Player {
   }
 
   /**
-   * @param {boolean} showHand 手札の中身を見せるか（相手には枚数だけ）
+   * @param {boolean} showHand 手札の中身とトラップの種類を見せるか（相手には枚数・場所だけ）
    */
   toState(showHand) {
     return {
       castleHp: this.castle.hp,
       castleMaxHp: this.castle.maxHp,
       eliminated: this.eliminated,
+      cardsPlayedThisTurn: this.cardsPlayedThisTurn,
+      drawNextTurn: this.drawNextTurn,
+      armor: this.armor,
+      traps: this.traps.map((t) => ({ trapId: t.trapId, roadId: t.roadId, square: t.square, type: showHand ? t.type : null })),
       hand: showHand ? this.hand.map((c) => c.toState()) : null,
       handCount: this.hand.length,
       playedThisTurn: this.playedThisTurn,
