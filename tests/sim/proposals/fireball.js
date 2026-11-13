@@ -7,6 +7,7 @@ import { runMany } from '../sim.js';
 const args = process.argv.slice(2);
 const games = Number(args[args.indexOf('--games') + 1] || 1000);
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1].split(',') : null;
+const seed = args.includes('--seed') ? Number(args[args.indexOf('--seed') + 1]) : 1;
 
 export const PROPOSALS = {
   '今のルール': {},
@@ -36,6 +37,9 @@ export const PROPOSALS = {
   'A+B3+C2(2枚)+後攻+4': { rules: { advanceAfterWin: true, soldierCastleDamageMultiplier: 3, secondPlayerCastleBonus: 4 }, cards: { fireball: { count: 2 } } },
   'A+B3+C2(2枚)+後攻+6': { rules: { advanceAfterWin: true, soldierCastleDamageMultiplier: 3, secondPlayerCastleBonus: 6 }, cards: { fireball: { count: 2 } } },
   'A+B3+C2(2枚)+城22+後攻+4': { rules: { advanceAfterWin: true, soldierCastleDamageMultiplier: 3, castleMaxHp: 22, secondPlayerCastleBonus: 4 }, cards: { fireball: { count: 2 } } },
+  'B3+C2(2枚)+後攻+4（Aなし）': { rules: { soldierCastleDamageMultiplier: 3, secondPlayerCastleBonus: 4 }, cards: { fireball: { count: 2 } } },
+  'D 道3マス+B2+城40+後攻+1+火4枚': { rules: { laneLength: 3, soldierCastleDamageMultiplier: 2, castleMaxHp: 40, secondPlayerCastleBonus: 1 }, cards: { fireball: { count: 4 } } },
+  'D+A': { rules: { laneLength: 3, advanceAfterWin: true, soldierCastleDamageMultiplier: 2, castleMaxHp: 40, secondPlayerCastleBonus: 1 }, cards: { fireball: { count: 4 } } },
 };
 
 // 比べる元は、この案を入れる前の数値（tests/fixtures/ = #12 の数値）。data/ は案を入れたあとの値なので使わない
@@ -46,13 +50,13 @@ export function dataFor(p) {
 const SAME = ['random', 'aggro', 'smart', 'defensive', 'guard'];
 const pct = (x) => `${Math.round(x * 100)}%`;
 
-console.log(`各 ${games} 試合・シード 1`);
-console.log('| 案 | 兵士からの城ダメージ（smart同士 / 全組み合わせ） | 決着 | smart同士の手番（中央値） | 同じ戦い方同士の p1 勝率 | smart がランダムに勝つ | 迷う場面（smart同士） | ファイアボールの割合（smart同士） |');
+console.log(`各 ${games} 試合・シード ${seed}`);
+console.log('| 案 | 兵士からの城ダメージ（smart同士 / 全組み合わせ） | 決着 | smart同士の手番 平均（中央値・最大） | 同じ戦い方同士の p1 勝率 | smart がランダムに勝つ | 迷う場面（smart同士） | ファイアボールの割合（smart同士） |');
 console.log('|---|---|---|---|---|---|---|---|');
 for (const [name, p] of Object.entries(PROPOSALS)) {
   if (only && !only.includes(name.split(' ')[0])) continue;
   const { rules, cards } = dataFor(p);
-  const run = (a, b) => runMany({ games, seed: 1, cards, rules, strategies: [a, b] });
+  const run = (a, b) => runMany({ games, seed, cards, rules, strategies: [a, b] });
   const same = SAME.map((s) => run(s, s));
   const sr = run('smart', 'random');
   const rs = run('random', 'smart');
@@ -62,9 +66,8 @@ for (const [name, p] of Object.entries(PROPOSALS)) {
   const total = all.reduce((a, r) => a + r.games, 0);
   const share = all.reduce((a, r) => a + r.soldierDamageShare, 0) / all.length;
   const p1 = same.map((r) => r.winRate.p1 || 0);
-  const p1All = [...p1, sr.winRate.p1 || 0, 1 - (rs.winRate.p2 || 0)];
   const vsRandom = ((sr.winRate.p1 || 0) + (rs.winRate.p2 || 0)) / 2;
   console.log(
-    `| ${name} | ${pct(smart.soldierDamageShare)} / ${pct(share)} | ${decided}/${total} | ${smart.avgTurns.toFixed(0)}（${smart.medianTurns}） | ${pct(Math.min(...p1))}〜${pct(Math.max(...p1))} | ${pct(vsRandom)} | ${pct(smart.choiceRate)} | ${pct(smart.spellDamageByType.fireball || 0)} |`,
+    `| ${name} | ${pct(smart.soldierDamageShare)} / ${pct(share)} | ${decided}/${total} | ${smart.avgTurns.toFixed(0)}（${smart.medianTurns}・${smart.maxTurns}） | ${pct(Math.min(...p1))}〜${pct(Math.max(...p1))} | ${pct(vsRandom)} | ${pct(smart.choiceRate)} | ${pct(smart.spellDamageByType.fireball || 0)} |`,
   );
 }
