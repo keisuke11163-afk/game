@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>キャッスルフィールド</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 相手の情報 -->
+    <header class="info-bar" id="opp-info">
+      <span class="info-name" id="opp-name">相手</span>
+      <span class="info-hand">手札 <b id="opp-hand-count">0</b>枚</span>
+      <span class="info-deck">山札 <b id="deck-count">0</b>枚</span>
+    </header>
+
+    <!-- 盤面：相手の城 / 2本のレーン / 自分の城 -->
+    <main id="board">
+      <section class="castle" id="castle-opp">
+        <div class="castle-body">
+          <div class="castle-label" id="castle-opp-label">相手の城</div>
+          <div class="hp-bar"><div class="hp-fill" id="castle-opp-fill"></div></div>
+          <div class="hp-text"><span id="castle-opp-hp">100</span> / <span id="castle-opp-max">100</span></div>
+        </div>
+      </section>
+
+      <section id="field">
+        <div class="lane" id="lane-opp"><div class="cells"></div><div class="soldier-layer"></div></div>
+        <div class="lane" id="lane-me"><div class="cells"></div><div class="soldier-layer"></div></div>
+      </section>
+
+      <section class="castle" id="castle-me">
+        <div class="castle-body">
+          <div class="castle-label" id="castle-me-label">自分の城</div>
+          <div class="hp-bar"><div class="hp-fill" id="castle-me-fill"></div></div>
+          <div class="hp-text"><span id="castle-me-hp">100</span> / <span id="castle-me-max">100</span></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 自分の操作エリア -->
+    <footer id="controls">
+      <div class="control-row">
+        <p id="message">カードをタップで選択、もう一度タップで使用</p>
+        <button id="end-turn" type="button">ターン終了</button>
+      </div>
+      <div id="hand"></div>
+    </footer>
+
+    <!-- ターン交代・勝敗の画面（相手の手札を隠す） -->
+    <div id="overlay" class="overlay" hidden>
+      <div class="overlay-box">
+        <p class="overlay-title" id="overlay-title"></p>
+        <p class="overlay-sub" id="overlay-sub"></p>
+      </div>
+    </div>
+
+    <div id="error" class="error" hidden></div>
+  </div>
+
+  <script type="module" src="js/ui/main.js"></script>
+</body>
+</html>

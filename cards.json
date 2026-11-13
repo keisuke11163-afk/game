@@ -1,0 +1,52 @@
+{
+  "rules": {
+    "castleHp": 100,
+    "initialHand": 6,
+    "drawPerTurn": 2,
+    "laneLength": 6
+  },
+  "cards": [
+    {
+      "id": "infantry",
+      "name": "歩兵",
+      "type": "soldier",
+      "count": 10,
+      "hp": 3,
+      "attack": 3,
+      "speed": 2
+    },
+    {
+      "id": "knight",
+      "name": "騎士",
+      "type": "soldier",
+      "count": 6,
+      "hp": 5,
+      "attack": 5,
+      "speed": 3
+    },
+    {
+      "id": "fireball",
+      "name": "ファイアボール",
+      "type": "magic",
+      "count": 6,
+      "effect": "damageEnemyCastle",
+      "value": 8
+    },
+    {
+      "id": "thunder",
+      "name": "サンダー",
+      "type": "magic",
+      "count": 6,
+      "effect": "damageEnemySoldiers",
+      "value": 3
+    },
+    {
+      "id": "heal",
+      "name": "ヒール",
+      "type": "magic",
+      "count": 6,
+      "effect": "healOwnCastle",
+      "value": 10
+    }
+  ]
+}
