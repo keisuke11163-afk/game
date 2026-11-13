@@ -95,6 +95,8 @@ js/
     Castle.js
     Card.js
     Soldier.js
+    Road.js        … 道（となりの席どうしをつなぐ）
+    Monster.js     … 魔物と、強化のデータのチェック
   ui/              … 画面表示と入力
     Renderer.js
     HandView.js
@@ -102,6 +104,8 @@ js/
 data/
   cards.json       … カードの定義
   rules.json       … ルールの数値
+  monsters.json    … 魔物の定義（STEP 3）
+  upgrades.json    … コインで買う強化（STEP 3）
 tests/             … 自動テスト（node --test）。Node.js だけで動く
   helpers.js       … data/ と fixtures/ の読み込み、シード付き乱数、イベントの記録
   fixtures/        … テスト用の固定データ（data/ を調整してもロジックのテストが落ちないように）
@@ -149,19 +153,21 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 - 兵士ID（soldierId）：場に出た兵士につく一意のID。例：`"s03"`
 - カードIDは山札をシャッフルしたあとの順に振る。IDから種類は分からない
 - 道ID（roadId）：となりの席の2人をつなぐ道のID。2人のIDを席順で `-` でつなぐ。例：`"p1-p2"`。2人なら道は `"p1-p2"` の1本だけ
-- 対象（target）：カードを出す先。`{ playerId }`（兵士は送り込む相手、攻撃の魔法は攻める相手、ヒール・城壁は自分）、`{ soldierId }`（武器・盾：道の上の自分の兵士）、`{ roadId, square }`（トラップ：自分の側のマス）。STEP 3 で `{ monsterId }` が増える
+- 対象（target）：カードを出す先。`{ monsterId }`（ファイアボールで魔物を狙う）もある。`{ playerId }`（兵士は送り込む相手、攻撃の魔法は攻める相手、ヒール・城壁は自分）、`{ soldierId }`（武器・盾：道の上の自分の兵士）、`{ roadId, square }`（トラップ：自分の側のマス）。
 
 ### UIから呼ぶもの
 
 | メソッド | 説明 |
 |---|---|
-| `new Game({ cards, rules, rng })` | ゲームを作る。`cards` / `rules` は `data/` の JSON の中身（Game はファイルを読まない）。`rng` は 0以上1未満を返す乱数で、省略すると `Math.random`。作った時点で初期手札は配られていて、`phase` は `"ready"`。イベントは出さない |
+| `new Game({ cards, rules, rng, monsters, upgrades })` | ゲームを作る。`cards` / `rules` / `monsters` / `upgrades` は `data/` の JSON の中身（Game はファイルを読まない）。`monsters` / `upgrades` は省略でき、省略すると魔物は出ず強化は買えない。`rng` は 0以上1未満を返す乱数で、省略すると `Math.random`。作った時点で初期手札は配られていて、`phase` は `"ready"`。イベントは出さない |
 | `game.start()` | ゲームを始める。全イベントを `on()` で購読してから呼ぶと、p1 のターン1が始まる（`turnStarted` → ドロー → 進軍） |
 | `game.getState(viewerId)` | 今の状態をただのオブジェクトで返す。`viewerId` の手札は中身まで、相手の手札は枚数だけ入る |
 | `game.canPlayCard(cardId, target)` | そのカードを今出せるかを返す（読むだけで、状態は変わらない）。出せないときは `{ ok: false, reason }`。`playCard` と同じ判定なので、UIは出せない理由を前もって表示できる。`target` を省略して、対象が2つ以上あるときは `{ ok: true, needsTarget: true }` |
 | `game.getTargets(cardId)` | そのカードを今出せる対象の一覧（読むだけ）。出せないときは空の配列。対象の形は下の「対象」 |
 | `game.playCard(cardId, target)` | カードを使う。対象が1つしかないときは `target` を省略してよい（2人なら今のカードはすべて省略できる）。対象が2つ以上あるのに省略すると `{ ok: false, reason: "対象を選んでください", needsTarget: true }` |
 | `game.discard(cardIds)` | 手札を捨てる。`phase` が `"discard"` のときだけ使える。捨てる必要がある枚数ちょうどを1回で渡す（多い・少ない・重複・手札にないカードは `{ ok: false }`）。捨て終わったら、自動で次の人のターンが始まる（`endTurn()` を呼び直さない） |
+| `game.canBuyUpgrade(upgradeId)` | 強化を今買えるか（読むだけ）。`{ ok }` か `{ ok: false, reason }` |
+| `game.buyUpgrade(upgradeId)` | コインで強化を買う。自分のメインの場面（`phase` が `"main"`）で何回でも。メインの1枚とは別 |
 | `game.endTurn()` | ターンを終える。手札が上限を超えていたら `phase` が `"discard"` になり、捨て終わるまで次の人の番にならない |
 | `game.on(type, handler)` / `game.off(type, handler)` | イベントの購読と解除。`handler` はペイロードのオブジェクトを1つ受け取る。表にない `type` を渡すと `{ ok: false }` |
 
@@ -187,6 +193,8 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 ```js
 {
   playerOrder: ["p1", "p2"],   // 席順（手番の順）
+  round: 2,                    // 周回（席順の最初の人のターンが始まるたびに1増える。start() の前は 0）
+  monsters: [{ monsterId: "m01", type: "slime", roadId: "p1-p2", square: 2, hp: 4, maxHp: 4, attack: 1, element: "water", attackIn: 3 }],
   roads: [{ roadId: "p1-p2", players: ["p1", "p2"], length: 5 }],  // 道。length はいつも laneLength
   turn: 3,                     // 通算ターン数（1から）
   currentPlayer: "p1",
@@ -206,6 +214,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
       cardsPlayedThisTurn: 2,  // このターンに出した枚数（メイン・付加・防御すべて）
       drawNextTurn: 1,         // 次のターンに引く枚数
       armor: 0,                // 城壁の残り
+      coins: 2,                // コイン（魔物のとどめでもらう）
       traps: [{ trapId: "t01", roadId: "p1-p2", square: 1, type: "pit" }],  // type は本人にだけ見え、ほかの人には null
       soldiers: [{
         soldierId: "s03", type: "knight", hp: 4, attack: 6, position: 3, roadId: "p1-p2", targetId: "p2",
@@ -257,6 +266,15 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `trapTriggered` | `{ playerId, trapId, type, soldierId, roadId, square }` … `playerId` は置いた人。発動したら種類が見える |
 | `statusApplied` | `{ playerId, soldierId, status, turns }` … `status` は `"poison"` か `"frozen"` |
 | `statusCleared` | `{ playerId, soldierId, status }` |
+| `roundStarted` | `{ round }` … 周回の始め（`turnStarted` のすぐあと） |
+| `monsterAppeared` | `{ monsterId, type, roadId, square, hp, attack, element }` |
+| `monsterAttackedCastle` | `{ monsterId, playerId, amount, hp }` … 放置された魔物が城を攻めた。`playerId` は城の持ち主、`amount` は実際に減った量（城HPは1より下がらない） |
+| `monsterClashed` | `{ attacker: { playerId, soldierId }, monsterId, roadId, square }` … 兵士が魔物と戦う。`square` は兵士が止まったマス |
+| `monsterDamaged` | `{ monsterId, amount, hp, by }` … `by` は `{ playerId, soldierId }`（兵士）か `{ playerId, type }`（魔法） |
+| `monsterDefeated` | `{ monsterId, playerId, reward }` … `playerId` はとどめを刺した人 |
+| `coinsChanged` | `{ playerId, delta, coins, reason }` … `reason` は `"reward"` か `"upgrade"` |
+| `upgradeBought` | `{ playerId, upgradeId, cost }` … このあと効果のイベント（`castleHealed` / `cardDrawn` / `soldierBuffed`） |
+| `soldierBuffed` | `{ playerId, soldierId, attack }` … とぎ石で攻撃力が上がった |
 | `gameOver` | `{ winner }` |
 
 #### イベントの順番
@@ -268,6 +286,9 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   - 兵士同士が戦うとき：`soldierMoved`（止まった位置まで。動かなければ出さない）→ `soldiersClashed` → `soldierDamaged`（守る側）→ `soldierDamaged`（攻める側）→ HPが0以下の兵士の `soldierDestroyed`（`"killed"`）。両方消えるときは**守る側 → 攻める側**の順（`soldierDamaged` と同じ順番）
   - 進軍の途中で城HPが0以下になったら、残りの兵士は動かさずにすぐ `gameOver` を出す
 - 進軍（STEP 2）：1体ずつ「毒の `soldierDamaged`（`cause: "poison"`）→（0なら `soldierDestroyed` で、動かない）→（凍結なら休んで、0回になったら `statusCleared`）→ 動く」。1マス進むごとにトラップ → 戦う相手の順に確かめ、トラップなら `soldierMoved`（そのマスまで）→ `trapTriggered` → `soldierDamaged`（`cause: "trap"`）→（0なら）`soldierDestroyed`。トラップにかかったらそのターンは止まる
+- 周回の始め（席順の最初の人のターン）：`turnStarted` → `roundStarted` → 放置された魔物の `monsterAttackedCastle`（出た順）→ `monsterAppeared`（道の順）→ 城壁の `armorExpired` → ドロー → 進軍
+- 兵士と魔物の戦い：`soldierMoved`（動いたら）→ `monsterClashed` → `monsterDamaged` → `soldierDamaged`（兵士）→（魔物が0なら）`monsterDefeated` → `coinsChanged` →（兵士が0なら）`soldierDestroyed`。1マスごとにトラップ → 相手の兵士 → 魔物の順に確かめる
+- ファイアボールで魔物：`cardPlayed` → `spellCast`（`target` は `monsterId`）→ `monsterDamaged` →（0なら）`monsterDefeated` → `coinsChanged`
 - ターンの始めに城壁が残っていたら、`turnStarted` のすぐあと（ドローの前）に `armorExpired`
 - カードを出したとき：`cardPlayed` のあと
   - 兵士：`soldierDeployed`
@@ -294,7 +315,9 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   "laneLength": 5,
   "elementBonus": 2,
   "trapMaxPosition": 1,
-  "drawPerCardUsed": 1
+  "drawPerCardUsed": 1,
+  "monsterFirstRound": 3,
+  "monsterSpawnChance": 0.35
 }
 ```
 
@@ -314,6 +337,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 }
 ```
 
+- `monsterFirstRound`：魔物が出はじめる周回（省略すると3）。`monsterSpawnChance`：周回の始めに、魔物がいない道ごとに魔物が出る確率（0〜1の数。省略すると0）
 - `elementBonus`：属性が強いときに増えるダメージ（省略すると0）。`trapMaxPosition`：トラップを置ける、自分の城から数えた位置の上限（省略すると1）。`drawPerCardUsed`：次のターンに引く枚数 ＝ max(`drawPerTurn`, 使った枚数 × これ)（省略すると0 ＝ いつも `drawPerTurn`）
 - カードの `kind`：`soldier` / `spell` / `weapon`（`attackBonus`、`element`）/ `defense`（`effect`: `shieldSoldier` / `armorCastle`、`amount`）/ `trap`（`effect`: `pit`、`amount`）。魔法の `effect` に `poisonEnemySoldiers`（`amount`, `turns`）と `freezeEnemySoldiers`（`turns`）が増えた。`element` は `fire` / `water` / `wood`
 - `secondPlayerCastleBonus`：後攻（p2）の城だけ、HPと上限がこのぶん多い（先攻有利をやわらげるため）。0以上の整数
