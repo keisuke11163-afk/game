@@ -26,7 +26,7 @@ export class HandView {
     this.hand = [];          // [{ cardId, type }]
     this.selectedId = null;
     this.locked = true;      // 演出中・交代画面中は操作しない
-    this.dim = false;        // このターンはもう出した（見た目だけ。押せば理由が出る）
+    this.blocked = new Map(); // 出せないカード：cardId → 理由（見た目を暗くするだけ。押せば理由が出る）
     this.discardCount = 0;   // 0 以外なら「捨てるカードを選ぶ」モード
     this.discardPicks = new Set();
     this.drag = null;
@@ -69,11 +69,10 @@ export class HandView {
 
   /**
    * @param {{cardId:string,type:string}[]} hand
-   * @param {{ dim?: boolean, newIds?: Iterable<string> }} opts
+   * @param {{ newIds?: Iterable<string> }} opts
    */
-  render(hand, { dim = this.dim, newIds = [] } = {}) {
+  render(hand, { newIds = [] } = {}) {
     this.hand = hand.map((c) => ({ ...c }));
-    this.dim = dim;
     if (this.selectedId && !this.hand.some((c) => c.cardId === this.selectedId)) this.selectedId = null;
     for (const id of [...this.discardPicks]) if (!this.hand.some((c) => c.cardId === id)) this.discardPicks.delete(id);
     const fresh = new Set(newIds);
@@ -104,7 +103,7 @@ export class HandView {
   applyCardClasses(el) {
     const id = el.dataset.id;
     el.classList.toggle('selected', id === this.selectedId);
-    el.classList.toggle('dim', this.dim && !this.discardCount);
+    el.classList.toggle('dim', this.blocked.has(id) && !this.discardCount);
     el.classList.toggle('discard-pick', this.discardPicks.has(id));
   }
 
@@ -130,9 +129,16 @@ export class HandView {
     this.updateDetail();
   }
 
-  setDim(dim) {
-    this.dim = dim;
+  /** @param {Map<string, string>} blocked 出せないカード：cardId → 理由 */
+  setPlayability(blocked) {
+    this.blocked = blocked;
     this.refreshClasses();
+    this.updateDetail();
+  }
+
+  /** カードを出したあと：残りの手札はすべて出せない（理由は押したときに Game から出る） */
+  blockAll() {
+    this.setPlayability(new Map(this.hand.map((c) => [c.cardId, ''])));
   }
 
   cardEl(cardId) {
@@ -201,8 +207,12 @@ export class HandView {
     const hints = [];
     if (input.tapAgain) hints.push('もう一度タップ');
     if (input.dragToPlay) hints.push('盤面へドラッグ');
-    this.el.detailHint.textContent = hints.length ? `${hints.join('・')}でも使えます` : '';
+    const reason = this.blocked.get(card.cardId);
+    this.el.detailHint.classList.toggle('warn', Boolean(reason));
+    if (reason) this.el.detailHint.textContent = `いまは出せません：${reason}`;
+    else this.el.detailHint.textContent = hints.length ? `${hints.join('・')}でも使えます` : '';
     this.el.detailUse.hidden = !input.useButton;
+    this.el.detailUse.classList.toggle('blocked', Boolean(reason) || this.blocked.has(card.cardId));
     this.el.detail.hidden = false;
   }
 

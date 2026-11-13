@@ -226,7 +226,7 @@ export class Animations {
     const app = this.el.app.getBoundingClientRect();
     if (playerId === ctx.viewerId) {
       const taken = this.handView.takeCard(cardId);
-      this.handView.setDim(true);
+      this.handView.blockAll();
       if (taken) {
         clone = taken.clone;
         from = { x: taken.rect.left - app.left + taken.rect.width / 2, y: taken.rect.top - app.top + taken.rect.height / 2 };

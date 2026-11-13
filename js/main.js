@@ -2,7 +2,8 @@
 // - data/ の JSON を読み、new Game({ cards, rules, rng }) を作る
 // - Game のイベントをキューにため、届いた順に Animations で演出する
 // - 演出中は操作を受け付けない（画面タップで演出を飛ばせる）
-// UI はゲームの状態を直接書き換えない。getState / playCard / discard / endTurn / on / off だけを使う。
+// UI はゲームの状態を直接書き換えない。getState / playCard / discard / endTurn / on / off と、
+// 開始の start()、出せるかを前もって調べる canPlayCard()（読むだけ）を使う。
 
 import { Game } from './game/Game.js';
 import { Renderer } from './ui/Renderer.js';
@@ -47,7 +48,7 @@ let anim;
 
 let game = null;
 let seed = 0;
-let viewerId = 'p1';
+let viewerId = null;       // 画面を見ているプレイヤー（最初の目隠しを開けるまでは null）
 let model = null;          // 表示用の状態（演出の進みに合わせて進む）
 let queue = [];            // まだ演出していないイベント
 let busy = true;           // 演出中・交代画面中は true
@@ -134,11 +135,17 @@ function newGame(seedOverride) {
 
   el.result.hidden = true;
   el.confetti.innerHTML = '';
-  const st = game.getState('p1');
-  viewerId = st.currentPlayer;
-  model = modelFromState(st);
+  // 開始前の状態を表示用に覚えてから start() する。p1 の turnStarted で最初の目隠しが出る
+  viewerId = null;
+  knownCards = new Map();
+  model = modelFromState(game.getState(null));
   setBusy(true);
-  handover(st.currentPlayer, st.turn).then(() => drainAndSettle());
+  const res = typeof game.start === 'function' ? game.start() : { ok: true };
+  if (!res?.ok) {
+    showError(`ゲームを始められませんでした：${reasonText(res?.reason)}`);
+    return;
+  }
+  drainAndSettle();
 }
 
 // ---------- 表示用の状態 ----------
@@ -163,14 +170,14 @@ function modelFromState(st) {
     discardCount: st.discardCount,
     discardRequired: model?.discardRequired ?? 0,
     players,
-    hand: (st.players[viewerId].hand ?? []).map((c) => ({ ...c })),
+    hand: (st.players[viewerId]?.hand ?? []).map((c) => ({ ...c })),
   };
 }
 
 /** viewer の手札の中身を覚えておく（引いたカードの種類を知るため） */
 function readState() {
   const st = game.getState(viewerId);
-  for (const c of st.players[viewerId].hand ?? []) knownCards.set(c.cardId, { ...c });
+  for (const c of st.players[viewerId]?.hand ?? []) knownCards.set(c.cardId, { ...c });
   return st;
 }
 
@@ -219,7 +226,7 @@ async function drainAndSettle() {
 /** 演出が終わったら、本当の状態（getState）で画面を合わせ、次の操作を待つ */
 async function settle() {
   const st = readState();
-  if (st.phase !== 'gameOver' && st.currentPlayer !== viewerId) {
+  if (st.phase !== 'gameOver' && st.phase !== 'ready' && st.currentPlayer !== viewerId) {
     // 手番が変わったのに turnStarted が来なかった場合の保険
     await handover(st.currentPlayer, st.turn);
     return settle();
@@ -231,8 +238,8 @@ async function settle() {
   const me = st.players[viewerId];
   const sameHand = me.hand.length === handView.hand.length &&
     me.hand.every((c, i) => c.cardId === handView.hand[i].cardId);
-  if (sameHand) handView.setDim(me.playedThisTurn);
-  else handView.render(me.hand, { dim: me.playedThisTurn });
+  if (!sameHand) handView.render(me.hand);
+  handView.setPlayability(playability(st));
 
   if (st.phase === 'gameOver') {
     showResult(st.winner);
@@ -253,6 +260,22 @@ async function settle() {
   setMessage(me.playedThisTurn
     ? 'カードを出しました。「ターン終了」で交代します'
     : 'カードを1枚出せます（出さずに終えてもOK）');
+}
+
+/** 手札の各カードが出せないなら、その理由（canPlayCard がなければ「もう出した」だけ見る） */
+function playability(st) {
+  const blocked = new Map();
+  const me = st.players[viewerId];
+  if (st.phase !== 'main') return blocked;
+  for (const c of me.hand) {
+    if (typeof game.canPlayCard === 'function') {
+      const res = game.canPlayCard(c.cardId);
+      if (res && !res.ok) blocked.set(c.cardId, reasonText(res.reason));
+    } else if (me.playedThisTurn) {
+      blocked.set(c.cardId, '');
+    }
+  }
+  return blocked;
 }
 
 // ---------- 操作 ----------
@@ -323,7 +346,8 @@ function handover(playerId, turn) {
         .flatMap((ev) => ev.payload.cardIds));
       model.hand = st.players[viewerId].hand.filter((c) => !willDraw.has(c.cardId));
       renderer.renderAll(model);
-      handView.render(model.hand, { dim: false });
+      handView.render(model.hand);
+      handView.setPlayability(new Map());
       el.handover.hidden = true;
       anim.delay(UI_CONFIG.timing.afterTurnStart).then(resolve);
     };

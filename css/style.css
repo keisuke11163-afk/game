@@ -467,6 +467,7 @@ button { font: inherit; color: inherit; }
 .detail-name { font-size: 15px; }
 .detail-desc { font-size: 12px; margin-top: 2px; }
 .detail-hint { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.detail-hint.warn { font-size: 11px; font-weight: bold; color: var(--danger); }
 .detail-use, .discard-ok {
   flex: none;
   padding: 12px 18px;
@@ -479,6 +480,7 @@ button { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .detail-use[hidden] { display: none; }
+.detail-use.blocked { background: #475569; color: var(--text); }
 .discard-msg { flex: 1; font-size: 13px; font-weight: bold; }
 .discard-ok { background: var(--danger); }
 .discard-ok.not-ready { opacity: 0.45; }

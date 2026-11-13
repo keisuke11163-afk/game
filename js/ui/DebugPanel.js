@@ -1,6 +1,7 @@
 // デバッグパネル（URL に ?debug=1 を付けたときだけ出す）。
-// 城HP・手札・山札の順番は、Game が用意する game.debug の仕組みを使う。
-// 仕組みがまだなければ「ロジック未対応」と表示する（UI 側では状態を書き換えない）。
+// 城HP・手札・山札の順番は、Game が用意するデバッグ用メソッド
+// （debugSetCastleHp / debugSetHand / debugSetDeck）を使う。UI 側では状態を書き換えない。
+// メソッドがなければ「ロジック未対応」と表示する。
 
 import { UI_CONFIG } from './config.js';
 import { playerName } from './text.js';
@@ -43,8 +44,8 @@ export class DebugPanel {
   }
 
   api(name) {
-    const dbg = this.getGame()?.debug;
-    return dbg && typeof dbg[name] === 'function' ? dbg[name].bind(dbg) : null;
+    const game = this.getGame();
+    return game && typeof game[name] === 'function' ? game[name].bind(game) : null;
   }
 
   call(name, ...args) {
@@ -69,9 +70,9 @@ export class DebugPanel {
     const typeKeys = Object.keys(this.cards);
     const typeList = typeKeys.map((k) => `${k}（${this.cards[k].name}）`).join('、');
     const state = this.getGame()?.getState(this.getViewerId());
-    const viewer = this.getViewerId();
+    const viewer = this.getViewerId() ?? 'p1';
     const handTypes = state?.players[viewer]?.hand?.map((c) => c.type) ?? [];
-    const off = (name) => (this.api(name) ? '' : `<span class="off">ロジック未対応（game.debug.${name}）</span>`);
+    const off = (name) => (this.api(name) ? '' : `<span class="off">ロジック未対応（game.${name}）</span>`);
 
     p.innerHTML = `
       <h3>乱数シード（山札の順番を固定）</h3>
@@ -82,21 +83,21 @@ export class DebugPanel {
 
       <h3>山札の順番（上から）</h3>
       <div class="row"><input type="text" class="deck" placeholder="infantry,fireball,knight">
-        <button type="button" class="set-deck" ${this.api('setDeckOrder') ? '' : 'disabled'}>設定</button></div>
-      <div class="note">使える種類：${typeList}</div>${off('setDeckOrder')}
+        <button type="button" class="set-deck" ${this.api('debugSetDeck') ? '' : 'disabled'}>設定</button></div>
+      <div class="note">使える種類：${typeList}</div>${off('debugSetDeck')}
 
       <h3>城HP</h3>
       ${['p1', 'p2'].map((id) => `
         <div class="row">${playerName(id)}
           <input type="number" class="hp" data-player="${id}" value="${state?.players[id]?.castleHp ?? ''}">
-          <button type="button" class="set-hp" data-player="${id}" ${this.api('setCastleHp') ? '' : 'disabled'}>設定</button></div>`).join('')}
-      ${off('setCastleHp')}
+          <button type="button" class="set-hp" data-player="${id}" ${this.api('debugSetCastleHp') ? '' : 'disabled'}>設定</button></div>`).join('')}
+      ${off('debugSetCastleHp')}
 
       <h3>${playerName(viewer)}の手札</h3>
       <div class="row"><input type="text" class="hand" value="${handTypes.join(',')}">
-        <button type="button" class="set-hand" ${this.api('setHand') ? '' : 'disabled'}>設定</button></div>
-      <div class="row">${typeKeys.map((k) => `<button type="button" class="add-card" data-type="${k}" ${this.api('setHand') ? '' : 'disabled'}>＋${this.cards[k].name}</button>`).join('')}</div>
-      ${off('setHand')}
+        <button type="button" class="set-hand" ${this.api('debugSetHand') ? '' : 'disabled'}>設定</button></div>
+      <div class="row">${typeKeys.map((k) => `<button type="button" class="add-card" data-type="${k}" ${this.api('debugSetHand') ? '' : 'disabled'}>＋${this.cards[k].name}</button>`).join('')}</div>
+      ${off('debugSetHand')}
 
       <h3>演出の速さ（大きいほどゆっくり）</h3>
       <div class="row"><input type="range" class="speed" min="0.25" max="3" step="0.25" value="${UI_CONFIG.speed}">
@@ -120,18 +121,18 @@ export class DebugPanel {
     q('.restart').addEventListener('click', () => this.onRestart(Number(q('.seed').value) >>> 0));
     q('.set-deck').addEventListener('click', () => {
       const list = types(q('.deck').value);
-      if (checkTypes(list)) this.call('setDeckOrder', list);
+      if (checkTypes(list)) this.call('debugSetDeck', list);
     });
     p.querySelectorAll('.set-hp').forEach((b) => b.addEventListener('click', () => {
       const id = b.dataset.player;
-      this.call('setCastleHp', id, Number(p.querySelector(`.hp[data-player="${id}"]`).value));
+      this.call('debugSetCastleHp', id, Number(p.querySelector(`.hp[data-player="${id}"]`).value));
     }));
     q('.set-hand').addEventListener('click', () => {
       const list = types(q('.hand').value);
-      if (checkTypes(list)) this.call('setHand', viewer, list);
+      if (checkTypes(list)) this.call('debugSetHand', viewer, list);
     });
     p.querySelectorAll('.add-card').forEach((b) => b.addEventListener('click', () => {
-      this.call('setHand', viewer, [...handTypes, b.dataset.type]);
+      this.call('debugSetHand', viewer, [...handTypes, b.dataset.type]);
     }));
     q('.speed').addEventListener('input', (e) => {
       UI_CONFIG.speed = Number(e.target.value);
