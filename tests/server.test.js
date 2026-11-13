@@ -1,6 +1,7 @@
 // オンライン対戦のサーバーのテスト：2人ぶんの接続で、合言葉で部屋に入り、1試合を最後まで遊ぶ。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { connect } from 'node:net';
 import { createGameServer, loadData } from '../server/server.js';
 import { filterEventFor } from '../js/game/visibility.js';
 import { seededRng } from './helpers.js';
@@ -159,6 +160,84 @@ test('2人ぶんの接続で1試合を最後まで遊ぶ。相手の手札は届
     assert.equal(ca.lastState().state.turn, 1);
   } finally {
     clients.forEach((c) => c.close());
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+/** 生のリクエストを送り、返事の1行目を返す */
+function rawRequest(port, text) {
+  return new Promise((resolve) => {
+    const sock = connect(port, 'localhost', () => sock.write(text));
+    let buf = '';
+    sock.on('data', (d) => { buf += d; });
+    sock.on('close', () => resolve(buf.split('\r\n')[0]));
+    sock.on('error', () => resolve(''));
+    setTimeout(() => sock.destroy(), 1000);
+  });
+}
+
+test('壊れたリクエストでもサーバーは止まらず、返事をする', async () => {
+  const { server, base } = await startServer();
+  try {
+    const port = server.address().port;
+    await rawRequest(port, 'GET http://[ HTTP/1.1\r\nHost: x\r\n\r\n');
+    const bad = await fetch(`${base}/api/join`, { method: 'POST', body: '{nope' });
+    assert.equal(bad.status, 400);
+    const big = await fetch(`${base}/api/join`, { method: 'POST', body: JSON.stringify({ passphrase: 'x'.repeat(20000), name: 'a' }) });
+    assert.equal(big.status, 413);
+    const a = await post(base, '/api/join', { passphrase: 'z', name: 'A' });
+    const b = await post(base, '/api/join', { passphrase: 'z', name: 'B' });
+    for (const method of ['constructor', '__proto__', 'toString', 123, 'debugSetHand']) {
+      assert.equal((await post(base, '/api/action', { token: a.token, method, args: [] })).ok, false);
+    }
+    assert.equal((await post(base, '/api/action', { token: a.token, method: 'endTurn', args: 'x' })).ok, false);
+    // サーバーはまだ生きている
+    assert.equal((await post(base, '/api/action', { token: a.token, method: 'endTurn', args: [] })).ok, true);
+    assert.ok(b.ok);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test('手札にないカードは、相手の手札にあってもなくても同じ文（相手の手札が分からない）', async () => {
+  const { server, base } = await startServer();
+  try {
+    const a = await post(base, '/api/join', { passphrase: 'q', name: 'A' });
+    await post(base, '/api/join', { passphrase: 'q', name: 'B' });
+    const game = [...server.lobby.rooms.values()][0].game;
+    const theirs = game.getState('p2').players.p2.hand[0].cardId;
+    const r1 = await post(base, '/api/action', { token: a.token, method: 'playCard', args: [theirs] });
+    const r2 = await post(base, '/api/action', { token: a.token, method: 'playCard', args: ['c999'] });
+    assert.deepEqual(r1, r2);
+    assert.equal(r1.reason, 'そのカードは手札にありません');
+    // 強化のIDにプロトタイプのキーを送っても、コインは変わらない
+    const r3 = await post(base, '/api/action', { token: a.token, method: 'buyUpgrade', args: ['constructor'] });
+    assert.equal(r3.ok, false);
+    assert.equal(game.getState('p1').players.p1.coins, 0);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test('data/ が間違っていたら、起動したときにエラーになる', () => {
+  const data = loadData();
+  assert.throws(() => createGameServer({ data: { ...data, rules: { ...data.rules, castleMaxHp: 0 } } }), /castleMaxHp/);
+});
+
+test('画面のファイルも配る。リポジトリの外や関係ないファイルは配らない', async () => {
+  const { server, base } = await startServer();
+  try {
+    const page = await fetch(`${base}/`);
+    assert.equal(page.status, 200);
+    assert.match(page.headers.get('content-type'), /text\/html/);
+    assert.equal((await fetch(`${base}/data/cards.json`)).status, 200);
+    assert.equal((await fetch(`${base}/server/server.js`)).status, 404);
+    assert.equal((await fetch(`${base}/js/../server/rooms.js`)).status, 404);
+    assert.equal((await fetch(`${base}/js/%2e%2e/server/rooms.js`)).status, 404);
+  } finally {
     server.closeAllConnections();
     server.close();
   }
