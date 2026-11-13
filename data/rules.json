@@ -1,0 +1,8 @@
+{
+  "castleMaxHp": 100,
+  "initialHand": 6,
+  "drawPerTurn": 2,
+  "firstTurnDraw": 0,
+  "maxHand": 8,
+  "laneLength": 6
+}

@@ -1,0 +1,7 @@
+{
+  "infantry":  { "name": "歩兵", "kind": "soldier", "hp": 3, "attack": 3, "speed": 2, "count": 10 },
+  "knight":    { "name": "騎士", "kind": "soldier", "hp": 5, "attack": 5, "speed": 3, "count": 6 },
+  "fireball":  { "name": "ファイアボール", "kind": "spell", "effect": "damageEnemyCastle", "amount": 8, "count": 6 },
+  "thunder":   { "name": "サンダー", "kind": "spell", "effect": "damageEnemySoldiers", "amount": 3, "count": 6 },
+  "heal":      { "name": "ヒール", "kind": "spell", "effect": "healOwnCastle", "amount": 10, "count": 6 }
+}
