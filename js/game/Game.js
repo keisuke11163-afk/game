@@ -106,8 +106,7 @@ export class Game {
     this.playerOrder.forEach((id, seat) => {
       // 2人用のボーナス。3人以上の席ごとのボーナスは STEP 5 で決める（seatCastleBonus）
       const bonus = this.playerOrder.length === 2 && seat === 1 ? this.rules.secondPlayerCastleBonus : 0;
-      this.players[id] = new Player(id, this.rules.castleMaxHp + bonus);
-      this.players[id].drawNextTurn = this.rules.drawPerTurn;
+      this.players[id] = new Player(id, this.rules.castleMaxHp + bonus, this.rules.drawPerTurn);
     });
     /** @type {Road[]} */
     this.roads = [];
@@ -143,6 +142,10 @@ export class Game {
       if (v !== undefined && (!Number.isInteger(v) || v < 0)) {
         throw new Error(`rules.json の ${key} は 0 以上の整数にしてください（書かなければ ${OPTIONAL_RULES[key]}）`);
       }
+    }
+    if (rules.trapMaxPosition !== undefined && Number.isInteger(rules.laneLength)
+      && rules.trapMaxPosition >= Math.floor(rules.laneLength / 2)) {
+      throw new Error('rules.json の trapMaxPosition は、真ん中のマスより手前（laneLength の半分より小さい）にしてください');
     }
     for (const [key, min] of Object.entries(RULE_KEYS)) {
       const v = rules[key];
@@ -345,13 +348,13 @@ export class Game {
           playerId: player.id, soldierId: soldier.soldierId, amount, hp: soldier.hp, cause: 'poison', blocked: 0,
         });
         soldier.poison.turns -= 1;
-        if (soldier.poison.turns <= 0) {
-          soldier.poison = null;
-          this.emit('statusCleared', { playerId: player.id, soldierId: soldier.soldierId, status: 'poison' });
-        }
         if (soldier.isDead) {
           this.removeSoldier(player, soldier, 'killed');
           continue;
+        }
+        if (soldier.poison.turns <= 0) {
+          soldier.poison = null;
+          this.emit('statusCleared', { playerId: player.id, soldierId: soldier.soldierId, status: 'poison' });
         }
       }
       // 凍結：この進軍は休む
@@ -519,8 +522,11 @@ export class Game {
     switch (def.kind) {
       case 'soldier':
         return { targets: playerTargets(this.neighborsOf(player.id)), reason: '兵士を送れる相手がいません' };
-      case 'weapon':
-        return { targets: ownSoldiers(), reason: '道の上に自分の兵士がいません' };
+      case 'weapon': {
+        // 同じ武器をもう一度持たせても何も起きないので、その兵士は対象にしない
+        const targets = player.soldiers.filter((x) => x.weapon !== card.type).map((x) => ({ soldierId: x.soldierId }));
+        return { targets, reason: player.soldiers.length ? 'もう同じ武器を持っています' : '道の上に自分の兵士がいません' };
+      }
       case 'trap': {
         const targets = [];
         for (const road of this.roads.filter((r) => r.has(player.id))) {
@@ -541,12 +547,23 @@ export class Game {
       case 'damageEnemyCastle':
         return { targets: playerTargets(this.opponentsOf(player.id)), reason: '相手がいません' };
       case 'damageEnemySoldiers':
-      case 'poisonEnemySoldiers':
-      case 'freezeEnemySoldiers':
         return {
           targets: playerTargets(this.opponentsOf(player.id).filter(hasSoldiers)),
           reason: '道の上に相手の兵士がいません',
         };
+      case 'poisonEnemySoldiers':
+      case 'freezeEnemySoldiers': {
+        // 効き目が変わる兵士がいる相手だけ（全員もう同じかそれ以上の状態なら、出しても何も起きない）
+        const changes = (x) =>
+          def.effect === 'poisonEnemySoldiers'
+            ? !x.poison || x.poison.turns < def.turns || x.poison.amount < def.amount
+            : x.frozen < def.turns;
+        const withSoldiers = this.opponentsOf(player.id).filter(hasSoldiers);
+        return {
+          targets: playerTargets(withSoldiers.filter((p) => p.soldiers.some(changes))),
+          reason: withSoldiers.length ? 'もう同じ状態になっています' : '道の上に相手の兵士がいません',
+        };
+      }
       case 'healOwnCastle':
         return { targets: player.castle.isFull ? [] : [{ playerId: player.id }], reason: '城のHPが満タンです' };
       case 'shieldSoldier':
@@ -554,7 +571,7 @@ export class Game {
       case 'armorCastle':
         return {
           targets: player.armor >= def.amount ? [] : [{ playerId: player.id }],
-          reason: 'もっと強い城壁があります',
+          reason: '同じか、より強い城壁がもう置いてあります',
         };
       default:
         return { targets: [], reason: 'このカードは出せません' };
@@ -639,7 +656,10 @@ export class Game {
     // 使ったカードは（兵士も）すぐ捨て札へ。使い切りのカードは、二度と山札に戻らない置き場へ
     if (card.isExhaust) this.exhaustedPile.push(card);
     else this.discardPile.push(card);
-    this.emit('cardPlayed', { playerId: player.id, cardId: card.cardId, type: card.type });
+    // トラップは種類を伏せる（相手に見えないように）
+    this.emit('cardPlayed', { playerId: player.id, cardId: card.cardId, type: card.kind === 'trap' ? null : card.type });
+    // 次のターンに引く枚数は、出すたびに決め直す（UI がターン中に表示できるように）
+    player.drawNextTurn = Math.max(this.rules.drawPerTurn, player.cardsPlayedThisTurn * this.rules.drawPerCardUsed);
 
     if (card.isSoldier) {
       const targetId = resolved.target.playerId;

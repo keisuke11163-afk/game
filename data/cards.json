@@ -8,8 +8,8 @@
   "waterSpear":  { "name": "水の槍", "kind": "weapon", "attackBonus": 1, "element": "water", "count": 2 },
   "woodAxe":     { "name": "木の斧", "kind": "weapon", "attackBonus": 1, "element": "wood", "count": 2 },
   "shield":      { "name": "盾", "kind": "defense", "effect": "shieldSoldier", "amount": 3, "count": 3 },
-  "wall":        { "name": "城壁", "kind": "defense", "effect": "armorCastle", "amount": 5, "count": 3 },
+  "wall":        { "name": "城壁", "kind": "defense", "effect": "armorCastle", "amount": 5, "count": 3, "exhaust": true },
   "pit":         { "name": "落とし穴", "kind": "trap", "effect": "pit", "amount": 3, "count": 3 },
-  "poisonMist":  { "name": "毒の霧", "kind": "spell", "effect": "poisonEnemySoldiers", "amount": 1, "turns": 3, "count": 3 },
+  "poisonMist":  { "name": "毒の霧", "kind": "spell", "effect": "poisonEnemySoldiers", "amount": 1, "turns": 4, "count": 3 },
   "frostBreath": { "name": "氷の息", "kind": "spell", "effect": "freezeEnemySoldiers", "turns": 1, "count": 3 }
 }
