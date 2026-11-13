@@ -6,15 +6,18 @@ import { loadJson } from './helpers.js';
 import { runMany, runMatch } from './sim/sim.js';
 import { STRATEGIES } from './sim/strategies.js';
 
+// シミュレーションは data/ の今の値で回す（バランス調整で決着しなくなったら、ここで気づく）
 const cards = loadJson('cards.json');
 const rules = loadJson('rules.json');
+// 1000手番（1人500ターン）を超えたら「決着しない」とみなす。今の値では守り優先同士の最長が700手番ほど
+const maxTurns = 1000;
 const names = Object.keys(STRATEGIES);
 
 test('どの戦い方の組み合わせでも、全試合が決着する（各20試合）', () => {
   for (const a of names) {
     for (const b of names) {
       if (a === 'pass' && b === 'pass') continue; // 2人とも何も出さないと決着しない（遊ぶ人はカードを出す）
-      const r = runMany({ games: 20, seed: 3, cards, rules, strategies: [a, b] });
+      const r = runMany({ games: 20, seed: 3, cards, rules, strategies: [a, b], maxTurns });
       assert.equal(r.decided, r.games, `${a} vs ${b}`);
     }
   }

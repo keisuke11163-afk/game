@@ -24,7 +24,7 @@ export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, game
     spellDamageByType: {},
     clashes: 0,
     discardTurns: 0,
-    choiceTurns: 0, // 出せるカードが2種類以上あったターン
+    choiceTurns: 0, // 出せるカードが2種類以上あったターン（「迷う場面」そのものではない。目安）
     mainTurns: 0,
     played: {},
     errors: 0,
@@ -48,18 +48,21 @@ export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, game
     if (!s) throw new Error(`戦い方 "${name}" はありません。${Object.keys(STRATEGIES).join(', ')}`);
     return s;
   });
-  const order = () => game.getState(null).playerOrder ?? ['p1', 'p2'];
-  const strategyOf = (pid) => players[order().indexOf(pid)] ?? players[Number(pid.slice(1)) - 1];
+  const strategyOf = (pid) => players[Number(pid.slice(1)) - 1];
+  const ctx = { cards, rules, discardCount: 0 };
+  game.on('discardRequired', (e) => { ctx.discardCount = e.count; });
 
   game.start();
   let guard = 0;
-  while (game.phase !== 'gameOver' && game.turn <= maxTurns) {
+  for (;;) {
+    const now = game.getState(null);
+    if (now.phase === 'gameOver' || now.turn > maxTurns) break;
     if (++guard > maxTurns * 20) throw new Error('シミュレーションが進まなくなりました');
-    const pid = game.currentPlayer;
+    const pid = now.currentPlayer;
     const strat = strategyOf(pid);
-    if (game.phase === 'discard') {
+    if (now.phase === 'discard') {
       stats.discardTurns += 1;
-      const r = game.discard(strat.chooseDiscard(game, pid, aiRng));
+      const r = game.discard(strat.chooseDiscard(game, pid, aiRng, ctx));
       if (!r.ok) throw new Error(`discard が失敗: ${r.reason}`);
       continue;
     }
@@ -68,14 +71,14 @@ export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, game
       game.getState(pid).players[pid].hand.filter((c) => game.canPlayCard(c.cardId).ok).map((c) => c.type),
     );
     if (playable.size >= 2) stats.choiceTurns += 1;
-    strat.takeTurn(game, pid, aiRng);
-    if (game.phase === 'gameOver') break;
+    strat.takeTurn(game, pid, aiRng, ctx);
+    if (game.getState(null).phase === 'gameOver') break;
     const r = game.endTurn();
     if (!r.ok) throw new Error(`endTurn が失敗: ${r.reason}`);
   }
-  stats.winner = game.winner;
-  stats.turns = game.turn;
   stats.finalState = game.getState(null);
+  stats.winner = stats.finalState.winner;
+  stats.turns = stats.finalState.turn;
   return stats;
 }
 
@@ -106,6 +109,8 @@ export function summarize(results, strategies) {
     avgTurns: turns.length ? turns.reduce((a, b) => a + b, 0) / turns.length : null,
     medianTurns: turns.length ? turns[Math.floor(turns.length / 2)] : null,
     maxTurns: turns.length ? turns.at(-1) : null,
+    // p1 勝率の誤差の目安（±2σ）。1000試合で約 ±3%
+    p1Margin: decided.length ? 2 * Math.sqrt(0.25 / decided.length) : null,
     winRate: Object.fromEntries(Object.entries(wins).map(([k, v]) => [k, v / (decided.length || 1)])),
     soldierDamageShare: dmg.soldier / totalDmg,
     spellDamageByType: Object.fromEntries(Object.entries(spellBy).map(([k, v]) => [k, v / totalDmg])),

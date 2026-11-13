@@ -2,12 +2,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game, EVENT_TYPES } from '../js/game/Game.js';
-import { loadJson, seededRng, recordEvents } from './helpers.js';
+import { buildData, seededRng, recordEvents } from './helpers.js';
 
-function newGame(rulesPatch = {}, cardsPatch = {}) {
-  const cards = { ...loadJson('cards.json'), ...cardsPatch };
-  const rules = { ...loadJson('rules.json'), ...rulesPatch };
-  return new Game({ cards, rules, rng: seededRng(1) });
+// tests/fixtures/ の固定データを使う（城HP25・後攻+2・初期手札5・ドロー1・歩兵HP5/攻3/速2・騎士HP4/攻5/速3・
+// ファイアボール8・サンダー3・ヒール10（使い切り）・山札34枚）。data/ を調整してもテストは落ちない
+function newGame(rulesPatch = {}, cardsPatch = {}, seed = 1) {
+  const { cards, rules } = buildData({ rules: rulesPatch, cards: cardsPatch, source: 'fixture' });
+  return new Game({ cards, rules, rng: seededRng(seed) });
 }
 
 /** 手札と山札を決めて始める。log は start() 以降の全イベント */
@@ -40,17 +41,24 @@ test('new Game: 初期手札が配られ、phase は ready、turn は 0', () => 
 });
 
 test('new Game: データの間違いは例外（どこが悪いかを書く）', () => {
-  const cards = loadJson('cards.json');
-  const rules = loadJson('rules.json');
+  const { cards, rules } = buildData({ source: 'fixture' });
   assert.throws(() => new Game({ cards, rules: { ...rules, castleMaxHp: 0 } }), /castleMaxHp/);
   assert.throws(() => new Game({ cards: { ...cards, x: { name: 'x', kind: 'nope', count: 1 } }, rules }), /"x"/);
   assert.throws(() => new Game({ cards, rules, rng: 3 }), /rng/);
+  assert.throws(() => new Game({ cards: { ...cards, heal: { ...cards.heal, exhaust: 'yes' } }, rules }), /exhaust/);
 });
 
-test('同じシードなら同じ山札になる', () => {
-  const a = newGame().getState('p1').players.p1.hand;
-  const b = newGame().getState('p1').players.p1.hand;
-  assert.deepEqual(a, b);
+test('同じシードなら同じ山札、違うシードなら違う山札になる', () => {
+  const hand = (seed) => newGame({}, {}, seed).getState('p1').players.p1.hand.map((c) => c.type).join();
+  assert.equal(hand(1), hand(1));
+  const others = [2, 3, 4, 5, 6].map(hand);
+  assert.ok(others.some((h) => h !== hand(1)));
+});
+
+test('getState(p2) では p1 の手札が null', () => {
+  const s = newGame().getState('p2');
+  assert.equal(s.players.p1.hand, null);
+  assert.equal(s.players.p2.hand.length, 5);
 });
 
 test('getState(null) は両方の手札が null', () => {
@@ -263,19 +271,29 @@ test('進軍の途中で城が落ちたら、残りの兵士は動かない', ()
   game.endTurn(); // 1体目が城に着いて落ちる。2体目は動かない
   const tail = log.slice(log.findLastIndex((e) => e.event === 'turnStarted'));
   assert.deepEqual(types(tail).slice(-4), ['soldierMoved', 'castleDamaged', 'soldierDestroyed', 'gameOver']);
+  assert.equal(game.getState(null).winner, 'p1');
+  assert.equal(game.getState(null).players.p1.soldiers.length, 1); // 2体目は残っている
 });
 
-test('on / off：表にないイベントは ok:false。handler の例外でも止まらない', () => {
+test('on / off：表にないイベントは ok:false。off で届かなくなる。handler の例外でも止まらない', () => {
   const game = newGame();
   assert.equal(game.on('nope', () => {}).ok, false);
+  assert.equal(game.off('nope', () => {}).ok, false);
+  let drawn = 0;
+  const onDraw = () => { drawn += 1; };
+  game.on('cardDrawn', onDraw);
+  game.off('cardDrawn', onDraw);
   const origError = console.error;
-  console.error = () => {};
+  const errors = [];
+  console.error = (...a) => errors.push(a);
   try {
     game.on('turnStarted', () => { throw new Error('boom'); });
     assert.equal(game.start().ok, true);
   } finally {
     console.error = origError;
   }
+  assert.equal(drawn, 0);
+  assert.equal(errors.length, 1);
   assert.equal(game.getState('p1').phase, 'main');
 });
 
@@ -286,4 +304,118 @@ test('デバッグ：範囲外の値は ok:false', () => {
   assert.equal(game.debugSetCastleHp('p2', 27).ok, true);
   assert.equal(game.debugSetHand('p1', ['dragon']).ok, false);
   assert.equal(game.debugSetDeck('x').ok, false);
+});
+
+test('使い切りのカードを手札の上限で捨てたら、捨て札置き場へ行く（山札に戻る）', () => {
+  const { game } = setup({ p1: [...Array(8).fill('infantry'), 'heal'], deck: Array(5).fill('infantry') });
+  game.endTurn(); // 10枚 → 2枚捨てる
+  const heal = handId(game, 'p1', 'heal');
+  const other = handId(game, 'p1', 'infantry');
+  assert.equal(game.discard([heal, other]).ok, true);
+  const s = game.getState(null);
+  assert.equal(s.discardCount, 2);
+  assert.equal(s.exhaustedCount, 0);
+});
+
+test('後攻のヒールは、その城の上限（27）で止まる', () => {
+  const { game, log } = setup({ p2: ['heal'], deck: ['infantry', 'infantry'] });
+  game.endTurn();
+  game.debugSetCastleHp('p2', 20);
+  play(game, 'heal');
+  const healed = log.find((e) => e.event === 'castleHealed');
+  assert.deepEqual([healed.playerId, healed.amount, healed.hp], ['p2', 7, 27]);
+});
+
+test('先攻の最初のターンは firstTurnDraw 枚、それ以外は drawPerTurn 枚引く', () => {
+  const { game, log } = setup({ deck: Array(10).fill('infantry'), rules: { firstTurnDraw: 0, drawPerTurn: 2 } });
+  assert.equal(log.filter((e) => e.event === 'cardDrawn').length, 0);
+  game.endTurn(); // p2
+  game.endTurn(); // p1 ターン3
+  const draws = log.filter((e) => e.event === 'cardDrawn');
+  assert.deepEqual(draws.map((e) => [e.playerId, e.cardIds.length]), [['p2', 2], ['p1', 2]]);
+});
+
+test('引く途中で山札が尽きたら deckShuffled が入り、cardDrawn は1回にまとまる', () => {
+  const { game, log } = setup({ p1: ['infantry'], deck: [], rules: { drawPerTurn: 2, firstTurnDraw: 0 } });
+  play(game, 'infantry'); // 捨て札1
+  game.debugSetDeck(['knight']); // 山札1
+  game.endTurn(); // p2 が2枚引く：1枚引く → 切り直し → 1枚引く
+  const tail = log.slice(log.findLastIndex((e) => e.event === 'turnStarted'));
+  assert.deepEqual(types(tail), ['turnStarted', 'deckShuffled', 'cardDrawn']);
+  assert.equal(tail[2].cardIds.length, 2);
+});
+
+test('両方とも生き残ったら、次の進軍でもう一度戦う。戦いは進軍する側の番にだけ起きる', () => {
+  const tank = { name: 'かべ', kind: 'soldier', hp: 9, attack: 2, speed: 1, count: 0 };
+  const { game, log } = setup({ p1: ['tank'], p2: ['tank'], deck: Array(20).fill('infantry'), cards: { tank } });
+  play(game, 'tank');
+  game.endTurn();
+  play(game, 'tank');
+  for (let i = 0; i < 5; i++) game.endTurn(); // ターン3〜7
+  const clashes = log.filter((e) => e.event === 'soldiersClashed');
+  const starts = log.filter((e) => e.event === 'turnStarted');
+  assert.ok(clashes.length >= 3);
+  // 攻める側は、その時の手番の人
+  for (const c of clashes) {
+    const idx = log.indexOf(c);
+    const turn = log.slice(0, idx).findLast((e) => e.event === 'turnStarted');
+    assert.equal(c.attacker.playerId, turn.playerId);
+  }
+  assert.ok(starts.length >= 7);
+  // 動かずに戦い続けている（同じ2体）
+  assert.equal(new Set(clashes.map((c) => c.defender.soldierId)).size, 2);
+});
+
+test('サンダーで HP が0になった兵士は消える。自分の兵士にはダメージがない', () => {
+  const { game, log } = setup({ p1: ['infantry', 'thunder'], p2: ['knight'], deck: Array(10).fill('infantry'), cards: { thunder: { name: 'サンダー', kind: 'spell', effect: 'damageEnemySoldiers', amount: 4, count: 6 } } });
+  play(game, 'infantry');
+  game.endTurn();
+  play(game, 'knight');
+  game.endTurn();
+  const before = log.length;
+  play(game, 'thunder');
+  const tail = log.slice(before);
+  assert.deepEqual(types(tail), ['cardPlayed', 'spellCast', 'soldierDamaged', 'soldierDestroyed']);
+  assert.equal(tail[3].reason, 'killed');
+  assert.equal(game.getState(null).players.p1.soldiers[0].hp, 5);
+});
+
+test('canPlayCard は状態を変えず、playCard と同じ答えを返す', () => {
+  const { game } = setup({ p1: ['thunder', 'infantry'], deck: ['heal'] });
+  const before = JSON.stringify(game.getState('p1'));
+  const thunder = handId(game, 'p1', 'thunder');
+  const check = game.canPlayCard(thunder);
+  assert.equal(JSON.stringify(game.getState('p1')), before);
+  assert.deepEqual(game.playCard(thunder), check);
+});
+
+test('ready のあいだは出せない・ターンを終えられない', () => {
+  const game = newGame();
+  const id = game.getState('p1').players.p1.hand[0].cardId;
+  assert.equal(game.playCard(id).reason, 'ゲームがまだ始まっていません');
+  assert.equal(game.endTurn().ok, false);
+  assert.equal(game.discard([]).ok, false);
+});
+
+test('discard の途中は debugSetHand が使えない。多すぎる枚数もだめ。捨てたら捨て札が増える', () => {
+  const { game } = setup({ p1: Array(9).fill('infantry'), deck: Array(5).fill('heal') });
+  game.endTurn();
+  assert.equal(game.debugSetHand('p1', ['infantry']).ok, false);
+  const ids = game.getState('p1').players.p1.hand.map((c) => c.cardId);
+  assert.equal(game.discard(ids.slice(0, 3)).ok, false);
+  const before = game.getState(null).discardCount;
+  const log = recordEvents(game, ['cardDiscarded']);
+  game.discard(ids.slice(0, 2));
+  assert.equal(log.length, 1);
+  assert.equal(game.getState(null).discardCount, before + 2);
+});
+
+test('gameOver のあとは playCard / discard / start / endTurn がすべて ok:false', () => {
+  const { game } = setup({ p1: ['fireball', 'infantry'], deck: ['heal'] });
+  game.debugSetCastleHp('p2', 1);
+  play(game, 'fireball');
+  const id = handId(game, 'p1', 'infantry');
+  for (const r of [game.playCard(id), game.discard([id]), game.start(), game.endTurn(), game.canPlayCard(id)]) {
+    assert.equal(r.ok, false);
+  }
 });
