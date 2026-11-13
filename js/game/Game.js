@@ -25,7 +25,7 @@ import { Soldier } from './Soldier.js';
 import { Player } from './Player.js';
 import { Road } from './Road.js';
 
-/** 2人のときのプレイヤーID（人数を変えられるようになるまでは、いつもこの2人） */
+/** 2人のときのプレイヤーID（人数は rules.playerCount。3人以上は p3〜p8 が続く） */
 export const PLAYER_IDS = ['p1', 'p2'];
 
 /** Game が出すイベントの名前（CLAUDE.md「Gameが出すイベント」の表と同じ） */
@@ -116,7 +116,8 @@ export class Game {
    * @param {object} [options.decks] data/decks.json の中身（deckMode "own" のときに使う）
    * @param {{castles?: string[], decks?: string[]}} [options.setup] 席ごとの城の種類・デッキ
    */
-  constructor({ cards, rules, rng = Math.random, monsters = null, upgrades = null, castles = null, decks = null, setup = {} } = {}) {
+  constructor({ cards, rules, rng = Math.random, monsters = null, upgrades = null, castles = null, decks = null, setup: setupArg = {} } = {}) {
+    const setup = setupArg ?? {};
     Card.validateDefinitions(cards);
     Game.validateRules(rules);
     if (typeof rng !== 'function') throw new Error('rng は 0以上1未満の数を返す関数にしてください');
@@ -189,6 +190,7 @@ export class Game {
         this.piles.set(id, pile);
       });
     } else {
+      if (setup.decks !== undefined) throw new Error('setup.decks を使うときは、rules.json の deckMode を "own" にしてください');
       const pile = new Pile(null);
       pile.deck = this.shuffle(this.buildDeckTypes()).map((type) => this.createCard(type));
       for (const id of this.playerOrder) this.piles.set(id, pile);
@@ -377,7 +379,7 @@ export class Game {
 
   /**
    * まだ負けていない人を輪にならべ、となりどうしを道でつなぐ。2人なら1本。今ある道はそのまま残す。
-   * 負けた人が出たときの呼び出し（なくなった道の兵士を消す処理を含む）は STEP 5 で入れる。今は new Game() からだけ呼ぶ。
+   * 負けた人が出たとき（lastStanding）は eliminate() から呼び、なくなった道の兵士・魔物・トラップは eliminate() が消す。
    * @returns {{opened: Road[], closed: Road[]}}
    */
   rebuildRoads() {
@@ -1185,7 +1187,7 @@ export class Game {
 
   /**
    * 今の状態をただのオブジェクトで返す。viewerId の手札は中身まで、相手の手札は枚数だけ。
-   * @param {string} viewerId "p1" | "p2"
+   * @param {string|null} viewerId "p1"〜"p8"（それ以外なら全員の手札が null）
    */
   getState(viewerId) {
     const players = {};

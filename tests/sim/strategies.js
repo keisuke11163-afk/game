@@ -34,7 +34,7 @@ function weakest(game, targets) {
   const ratio = (t) => st[t.playerId].castleHp / st[t.playerId].castleMaxHp;
   const min = Math.min(...players.map(ratio));
   const ties = players.filter((t) => ratio(t) - min < 0.1); // 1割以内の差は同じくらいとみなす
-  return ties[Math.floor(tieRng() * ties.length)];
+  return ties.length === 1 ? ties[0] : ties[Math.floor(tieRng() * ties.length)];
 }
 
 /** 種類の優先順に、出せる最初のカードを出す */

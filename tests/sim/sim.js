@@ -122,6 +122,7 @@ export function summarize(results, strategies) {
     soldierDamageShare: dmg.soldier / totalDmg,
     spellDamageByType: Object.fromEntries(Object.entries(spellBy).map(([k, v]) => [k, v / totalDmg])),
     clashesPerGame: sum((r) => r.clashes) / results.length,
+    avgRounds: results.reduce((a, r) => a + r.finalState.round, 0) / results.length,
     roundLimitRate: results.filter((r) => r.reason === 'roundLimit').length / results.length,
     monstersDefeatedPerGame: sum((r) => r.monstersDefeated) / results.length,
     monsterCastleDamagePerGame: sum((r) => r.monsterCastleDamage) / results.length,

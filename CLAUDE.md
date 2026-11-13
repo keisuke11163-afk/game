@@ -120,7 +120,6 @@ tests/             … 自動テスト（node --test）。Node.js だけで動�
     run.js         … 表を出すコマンド（2人）
     multi.js       … 2人・4人・8人で、勝利条件と魔法の届く相手を比べる
     castles.js     … 城の種類・デッキの勝率
-    proposals/     … 案の比べ方（判断待ちの提案用）
 server/            … オンライン対戦のサーバー（Node.js だけ。ロジック担当）
   server.js        … HTTP（合言葉で入る・操作を受ける・SSE で送る）。node server/server.js で起動
   rooms.js         … 部屋と席。Game を動かし、プレイヤーごとに隠して送る
@@ -210,7 +209,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
   turn: 3,                     // 通算ターン数（1から）
   currentPlayer: "p1",
   phase: "main",               // "ready"（start() の前）| "main" | "discard" | "gameOver"
-  winner: null,                // 決着したら "p1" か "p2"
+  winner: null,                // 決着したら勝った人のID（"p1"〜"p8"）
   deckCount: 18,               // "own" のときは viewer 本人の山札の数（viewer がいなければ null）
   discardCount: 5,
   exhaustedCount: 1,           // 使い切り置き場の枚数（使い切りのカードを使うとここへ行き、山札に戻らない）
@@ -317,7 +316,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   - 武器：`weaponEquipped`／盾：`shieldAdded`／城壁：`castleArmored`／トラップ：`trapSet`
 - ターン終了：手札が上限を超えていたら `discardRequired`。捨てたら `cardDiscarded` → 次の人の `turnStarted` …
 - 周回の上限（`maxRounds`）に来たら、次の周回の `turnStarted` の代わりに `gameOver`（`reason: "roundLimit"`）
-- `lastStanding` で城が落ちたとき：`castleDamaged` → `playerEliminated` → 抜けた人の兵士の `soldierDestroyed`（`"eliminated"`）→ `roadClosed` → その道の兵士の `soldierDestroyed`（`"roadClosed"`）… → `roadOpened` →（残りが1人なら）`gameOver`
+- `lastStanding` で城が落ちたとき：`castleDamaged`（兵士なら `soldierDestroyed`（`"reachedCastle"`）のあと）→ `playerEliminated` → 抜けた人の兵士の `soldierDestroyed`（`"eliminated"`）→ `roadClosed` → その道の兵士の `soldierDestroyed`（`"roadClosed"`）… → `roadOpened` →（残りが1人なら）`gameOver`
 - `gameOver` はいちばん最後に1回だけ出る。そのあとの操作はすべて `{ ok: false }`
 
 ### データの形
@@ -634,15 +633,15 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 ### 人数
 - `rules.playerCount`：2〜8（省略すると2）。席順に `p1`〜`p8`。道は「となりの席どうし」（#16）
 - 席ごとの城ボーナス：`rules.seatCastleBonus`（席ごとの数の配列、省略できる）。省略すると、2人なら `[0, secondPlayerCastleBonus]`、3人以上なら席 i（0から）に `round(secondPlayerCastleBonus × i ÷ (人数−1))`（後ろの席ほど少し多い）
-- 兵士は道でつながった相手（となりの2人）にだけ送れる。ファイアボールなど城への魔法の届く相手は `rules.castleSpellRange`：`"neighbors"`（となりだけ）か `"any"`（誰にでも）。**仮：`"any"`**（シミュレーションで、4人・8人とも「誰にでも」の方が席ごとの勝率の差が小さく、考える人が勝ちやすく、試合も短かった）。2人ならどちらも同じ
+- 兵士は道でつながった相手（となりの2人）にだけ送れる。ファイアボールなど城への魔法の届く相手は `rules.castleSpellRange`：`"neighbors"`（となりだけ）か `"any"`（誰にでも）。**仮：`"any"`**（シミュレーションで、勝利条件が「最初に落とした人」のとき、4人・8人とも「誰にでも」の方が席ごとの勝率の差が小さく、考える人が勝ちやすく、試合も短かった。「最後の1人」ではほとんど差がない）。サンダー・毒の霧・氷の息は、この設定にかかわらず誰の兵士にでも使える。2人ならどちらも同じ
 
 ### 勝利条件（`rules.winCondition`）
 | 値 | 勝ち方 | 城が落ちた人 |
 |---|---|---|
 | `"firstDestroy"`（省略したとき） | **最初にどこかの城を落とした人の勝ち**（2人なら今と同じ） | — |
-| `"lastStanding"` | 最後まで城が残った1人の勝ち | 負けて抜ける（`playerEliminated`）。その人の兵士・トラップは消え、手札は捨て札へ。その人の道はなくなり、両どなりが新しい道でつながる（なくなった道の兵士・魔物も消える） |
+| `"lastStanding"` | 最後まで城が残った1人の勝ち。**長い**（8人で平均約160手番。抜けた人は終わるまで待つ）ので少人数向け | 負けて抜ける（`playerEliminated`）。その人の兵士・トラップは消え、手札は捨て札へ。その人の道はなくなり、両どなりが新しい道でつながる（なくなった道の兵士・魔物も消える） |
 
-- **周回の上限 `rules.maxRounds`**（仮：60。0 なら上限なし。2人の smart 同士で上限まで行くのは約5%）：その周回を全員が終えても決着していなければ、城HPの残りの割合（`castleHp ÷ castleMaxHp`）がいちばん多い人の勝ち。同じなら城HPが多い人、それも同じなら席順が後ろの人（先攻有利をやわらげる）。必ず決着させるため
+- **周回の上限 `rules.maxRounds`**（仮：60。0 なら上限なし。2人の smart 同士で上限まで行くのは、全員共通の山札で約5%、デッキ対戦で1〜11%）：その周回を全員が終えても決着していなければ、城HPの残りの割合（`castleHp ÷ castleMaxHp`）がいちばん多い人の勝ち。同じなら城HPが多い人、それも同じなら席順が後ろの人（先攻有利をやわらげる）。必ず決着させるため
 - `gameOver` に `reason` を足す：`"castleDestroyed"`（城を落とした）／`"lastStanding"`（最後の1人）／`"roundLimit"`（周回の上限）
 
 ### 城の種類（`data/castles.json`）
@@ -658,8 +657,8 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 
 ### デッキ対戦（`rules.deckMode`）
 - `"shared"`（省略したとき）：今と同じ、全員共通の山札
-- デッキ（仮）：`balanced`（バランス）、`assault`（突撃：騎士と武器が多い）、`fortress`（籠城：歩兵と守りが多い）
-- `"own"`：1人1つずつ山札・捨て札・使い切り置き場を持つ。中身は `data/decks.json` のデッキ（`{ name, cards: { type: 枚数 } }`）。席ごとに選ぶ：`setup: { decks: ["aggro", "control"] }`。省略すると全員 `rules.defaultDeck`
+- デッキ（仮）：`balanced`（バランス）、`assault`（突撃：騎士と武器が多い）、`siege`（籠城：歩兵・サンダー・盾が多い）。smart 同士でどの組み合わせも勝率50〜57%
+- `"own"`：1人1つずつ山札・捨て札・使い切り置き場を持つ。中身は `data/decks.json` のデッキ（`{ name, cards: { type: 枚数 } }`）。席ごとに選ぶ：`setup: { decks: ["assault", "balanced"] }`。省略すると全員 `rules.defaultDeck`
   - `getState()`：`deckMode`。`"own"` のとき、いちばん上の `deckCount` / `discardCount` / `exhaustedCount` は viewer 本人の数（viewer がいなければ `null`）、`players.pX.deckCount` などにそれぞれの数。`"shared"` のときは `players.pX` の方が `null`
   - `deckShuffled` に `playerId`（`"own"` のとき、だれの山札か。`"shared"` のときは `null`）を足す
 
@@ -668,9 +667,9 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 - `getState()`：`deckMode`、`players.pX.castleType`、`players.pX.maxHand`、`players.pX.deckCount` / `discardCount` / `exhaustedCount`（`"own"` のときだけ数）
 - イベント
   - `playerEliminated`：`{ playerId, by }`（`by` は城を落とした人）
-  - `roadClosed`：`{ roadId }` → その道の兵士の `soldierDestroyed`（`reason: "roadClosed"`）／`roadOpened`：`{ roadId, players }`
+  - `roadClosed`：`{ roadId, monsterIds }` → その道の兵士の `soldierDestroyed`（`reason: "roadClosed"`）／`roadOpened`：`{ roadId, players }`
   - `gameOver`：`{ winner, reason }`
-- 順番（`"lastStanding"` で城が落ちたとき）：`castleDamaged` → `playerEliminated` → 抜けた人の兵士の `soldierDestroyed`（`"eliminated"`）→ `roadClosed` →（その道の兵士の `soldierDestroyed`（`"roadClosed"`））→ `roadOpened` →（残りが1人なら）`gameOver`
+- 順番（`"lastStanding"` で城が落ちたとき）：`castleDamaged`（兵士が城に着いたときは、そのあとの `soldierDestroyed`（`"reachedCastle"`））→ `playerEliminated` → 抜けた人の兵士の `soldierDestroyed`（`"eliminated"`）→ `roadClosed` →（その道の兵士の `soldierDestroyed`（`"roadClosed"`））→ `roadOpened` →（残りが1人なら）`gameOver`
 
 ## 全体の設計（STEP 2〜5 の見通し）
 
@@ -687,7 +686,7 @@ STEP 2 以降で作り直しにならないよう、Game をどう広げるか�
 | 道は1本（`laneLength` マス） | **道は「となりの席どうし」をつなぐ。** 席を輪にならべ、となり合う2人の間に1本ずつ道がある。2人なら道は1本（今と同じ）、3人なら3本、8人なら8本。どの道も `laneLength` マス |
 | 兵士の位置は `position` だけ | 兵士は `roadId`（どの道か）と `position`（自分の城から数えたマス）を持つ。`targetId`（道の向こうの人）も入れる（`roadId` と持ち主から分かるが、UIが毎回計算しなくてすむように） |
 | 道のマス番号は「p1 の城側が 0」 | 道のマス番号は「その道の `players[0]`（席順が前の人）の城側が 0」。2人なら今と同じ。輪の端の道も同じ決まりで、たとえば `"p1-p8"` は p1 の城側が 0 |
-| 魔法の相手は自動で決まる | 相手が2人以上いるときは `playCard(cardId, target)` の `target` で選ぶ（下の「対象の選び方」）。対象が1つなら今と同じく省略できる |
+| 魔法の相手は自動で決まる（済：城への魔法の届く相手は `rules.castleSpellRange`） | 相手が2人以上いるときは `playCard(cardId, target)` の `target` で選ぶ（下の「対象の選び方」）。対象が1つなら今と同じく省略できる |
 | 後攻の城ボーナス（p2 だけ） | `secondPlayerCastleBonus` はそのまま残す（2人用）。3人以上のときは別のキー（`seatCastleBonus`：席ごとのボーナスの配列）を STEP 5 で足す |
 
 - 道の ID（`roadId`）：つないでいる2人のIDを席順で `-` でつないだもの。例：`"p1-p2"`、`"p1-p8"`
@@ -734,7 +733,7 @@ STEP 2 以降で作り直しにならないよう、Game をどう広げるか�
 - `getState().monsters`：魔物の配列（いなければ空の配列）。それぞれ `{ monsterId, type, roadId, square, hp, maxHp, attack, ... }`
 - 魔物の攻撃（放置したとき）では、城HPは1より下がらない（魔物の運で勝敗が決まらないように）
 
-### 山札（STEP 5 のデッキ対戦）
+### 山札（STEP 5 のデッキ対戦。済：「STEP 5」の節）
 - `rules.deckMode`：`"shared"`（今の2人共通の山札）か `"own"`（1人1つずつ山札を持つ）
 - `"own"` のとき、山札・捨て札・使い切り置き場はプレイヤーごと。`players.pX.deckCount` / `discardCount` / `exhaustedCount` に入る（`"shared"` のときは `null`）。いちばん上の `deckCount` などは、`"own"` のときは `getState(viewerId)` の viewer 本人の数（viewer がいなければ `null`）
 

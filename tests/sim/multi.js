@@ -12,8 +12,8 @@ const gameOptions = loadOptionalData();
 const pct = (x) => `${Math.round(x * 100)}%`;
 
 const VARIANTS = [
-  { label: '最初に落とした人・となりだけ（data/ の値）', rules: { winCondition: 'firstDestroy', castleSpellRange: 'neighbors' } },
-  { label: '最初に落とした人・誰にでも', rules: { winCondition: 'firstDestroy', castleSpellRange: 'any' } },
+  { label: '最初に落とした人・誰にでも（data/ の値）', rules: { winCondition: 'firstDestroy', castleSpellRange: 'any' } },
+  { label: '最初に落とした人・となりだけ', rules: { winCondition: 'firstDestroy', castleSpellRange: 'neighbors' } },
   { label: '最後の1人・となりだけ', rules: { winCondition: 'lastStanding', castleSpellRange: 'neighbors' } },
   { label: '最後の1人・誰にでも', rules: { winCondition: 'lastStanding', castleSpellRange: 'any' } },
 ];
@@ -29,7 +29,7 @@ for (const n of [2, 4, 8]) {
     const one = runMany({ games, seed: 2, cards, rules, gameOptions, strategies: ['smart', ...Array(n - 1).fill('random')] });
     const seatRates = Array.from({ length: n }, (_, i) => all.winRate[`p${i + 1}`] || 0);
     console.log(
-      `| ${n} | ${v.label} | ${all.decided}/${all.games} | ${all.avgTurns.toFixed(0)}（${all.medianTurns}・${all.maxTurns}） | ${(all.avgTurns / n).toFixed(1)} | ${pct(all.roundLimitRate)} | ${pct(Math.min(...seatRates))}〜${pct(Math.max(...seatRates))}（平均 ${pct(1 / n)}） | ${pct(one.winRate.p1 || 0)} |`,
+      `| ${n} | ${v.label} | ${all.decided}/${all.games} | ${all.avgTurns.toFixed(0)}（${all.medianTurns}・${all.maxTurns}） | ${all.avgRounds.toFixed(1)} | ${pct(all.roundLimitRate)} | ${pct(Math.min(...seatRates))}〜${pct(Math.max(...seatRates))}（平均 ${pct(1 / n)}） | ${pct(one.winRate.p1 || 0)} |`,
     );
   }
 }

@@ -162,3 +162,39 @@ test('デッキ対戦（own）：自分の山札が尽きたら自分の捨て�
   const sh = log.find((e) => e.event === 'deckShuffled');
   assert.deepEqual(sh, { event: 'deckShuffled', deckCount: 1, playerId: 'p1' });
 });
+
+test('lastStanding：進軍中に兵士が城を落として人が抜けても、残りの兵士の進軍は続く（閉じた道の自分の兵士は消える）', () => {
+  const { game, log } = make({ rules: { playerCount: 3, winCondition: 'lastStanding' } });
+  game.debugSetHand('p1', ['knight', 'knight']);
+  game.debugSetDeck(Array(30).fill('heal'));
+  game.start();
+  game.playCard(idOf(game, 'knight'), { playerId: 'p2' }); // 道 p1-p2
+  game.endTurn(); game.endTurn(); game.endTurn();
+  game.playCard(idOf(game, 'knight'), { playerId: 'p3' }); // 道 p1-p3
+  game.endTurn(); game.endTurn();
+  game.debugSetCastleHp('p2', 1);
+  game.endTurn(); // p1：1体目が p2 の城に着いて p2 が抜ける。2体目（p1-p3）は進む
+  const i = log.findIndex((e) => e.event === 'playerEliminated');
+  assert.equal(log[i - 1].reason, 'reachedCastle');
+  assert.equal(game.getState(null).phase, 'main');
+  assert.ok(log.slice(i).some((e) => e.event === 'soldierMoved'));
+});
+
+test('とりでは手札の上限が少ないので、捨てる枚数が変わる。デッキ対戦では捨てたカードはその人の捨て札へ', () => {
+  const { game, log } = make({ rules: { deckMode: 'own' }, setup: { castles: ['fortress', 'standard'], decks: ['aggro', 'guard'] } });
+  game.debugSetHand('p1', Array(7).fill('infantry'));
+  game.start(); // 1枚引いて8枚。上限6なので2枚捨てる
+  game.endTurn();
+  assert.equal(log.at(-1).count, 2);
+  const ids = game.getState('p1').players.p1.hand.slice(0, 2).map((c) => c.cardId);
+  game.discard(ids);
+  const s = game.getState(null);
+  assert.equal(s.players.p1.discardCount, 2);
+  assert.equal(s.players.p2.discardCount, 0);
+});
+
+test('setup の間違い：null は省略と同じ。shared で decks を渡したら例外。ボーナスがマイナスなら例外', () => {
+  assert.doesNotThrow(() => make({ setup: null }));
+  assert.throws(() => make({ setup: { decks: ['assault', 'balanced'] } }), /deckMode/);
+  assert.throws(() => make({ castles: { x: { name: 'x', castleSpellBonus: -1 } } }), /castleSpellBonus/);
+});

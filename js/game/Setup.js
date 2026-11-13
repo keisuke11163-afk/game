@@ -14,6 +14,10 @@ export function validateCastles(castles) {
     for (const key of CASTLE_KEYS) {
       if (def[key] !== undefined && !Number.isInteger(def[key])) throw new Error(`${where}: ${key} は整数にしてください`);
     }
+    // マイナスにすると、ダメージがマイナス（＝回復）になってしまうので0以上
+    for (const key of ['castleSpellBonus', 'soldierAttackBonus']) {
+      if (def[key] !== undefined && def[key] < 0) throw new Error(`${where}: ${key} は0以上にしてください`);
+    }
   }
 }
 
