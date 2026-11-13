@@ -467,6 +467,67 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
   - 1マス進むごとに、トラップ → 戦う相手の順に確かめる。トラップが発動したら `soldierMoved`（そのマスまで）→ `trapTriggered` → `soldierDamaged`（`cause: "trap"`）→（0なら）`soldierDestroyed`
   - 城壁はターンの始め（`turnStarted` のあと、ドローの前）に `armorExpired`
 
+## STEP 3：魔物とコイン
+
+**数値はすべて仮**（`data/monsters.json`・`data/upgrades.json`・`data/rules.json`）。
+
+### 魔物
+- 魔物の種類は `data/monsters.json`（キーが魔物の種類）。Game は `new Game({ cards, rules, rng, monsters, upgrades })` で受け取る（ファイルは読まない）。`monsters` を渡さなければ魔物は出ない（STEP 1・2 のまま）
+- **周回（`round`）**：席順の最初の人（まだ負けていない人）のターンが始まるたびに1増える（1から）。`getState().round`
+- **出現**：`rules.monsterFirstRound`（仮：3）周目から、周回の始めに、魔物がいない道ごとに `rules.monsterSpawnChance`（仮：0.35）の確率で1体出る。種類は `monsters.json` の `weight` の重みでランダム
+  - 出る場所は道の真ん中のマス（道のマス番号 `floor(laneLength / 2)`。5マスなら2）。1本の道に1体まで
+- **兵士と魔物**：兵士は進軍で、相手の兵士と同じように「同じマスか1つ先のマス」に魔物がいたら止まって戦う（お互いに攻撃力ぶんを同時に与える。属性も効く）。**倒すまで先へは進めない**
+  - 1マスごとに、トラップ → 相手の兵士 → 魔物 の順に確かめる
+  - 戦うのは進軍している側のターンだけ。魔物から兵士を攻めることはない
+- **魔法**：ファイアボール（`damageEnemyCastle`）は魔物も対象にできる（`{ monsterId }`）。サンダー・毒・凍結は魔物には効かない
+- **とどめボーナス**：魔物のHPを0にした人（兵士の持ち主か、魔法を使った人）が、その魔物の `reward` だけコインをもらう
+- **放置すると城を攻める**：魔物は出てから `attackEvery` 周ごとに、周回の始めに、その道の両はしの2人のうちランダムな1人の城に `castleAttack` ダメージ
+  - **魔物の攻撃では城HPは1より下がらない**（城を削れるのは手番の人の行動だけ。魔物の運で勝敗が決まらないように）。城壁は効かない
+- 理由（桜井流）：魔物は「倒すとコイン」「放置すると城が削られる」なので、どちらの人にも倒しに行く理由がある。倒すには兵士を道の真ん中で止めることになるので、攻めるか魔物を倒すかで迷いが生まれる
+
+### コインと強化
+- コインは魔物のとどめでもらえる。`getState().players.pX.coins`
+- 強化の種類は `data/upgrades.json`。自分のメインの場面（`phase` が `"main"`）で、何回でも買える（コインが足りる限り）。メインの1枚とは別
+  - `game.canBuyUpgrade(upgradeId)`：買えるか（`{ ok }` / `{ ok: false, reason }`）。読むだけ
+  - `game.buyUpgrade(upgradeId)`：買う
+- 強化（仮）
+
+| id | 名前 | 値段 | 効果 | 買えないとき |
+|---|---|---|---|---|
+| `repair` | 修理 | 3 | 自分の城HP+6（上限まで） | 城HPが満タン |
+| `recruit` | 補充 | 2 | 1枚引く | 山札も捨て札も空 |
+| `sharpen` | とぎ石 | 4 | 道の上の自分の兵士全員の攻撃力+1（ずっと） | 道の上に自分の兵士がいない |
+
+- 理由：コインは魔物からしか入らないので、回復（修理）で決着しなくなることはない
+
+### 魔物の種類（仮）
+| type | 名前 | HP | 攻撃 | 属性 | ごほうび | 放置したとき | 出やすさ |
+|---|---|---|---|---|---|---|---|
+| `slime` | スライム | 4 | 1 | 水 | 2 | 3周ごとに城へ2 | 5 |
+| `goblin` | ゴブリン | 7 | 3 | 木 | 3 | 2周ごとに城へ3 | 3 |
+| `dragon` | ドラゴン | 12 | 5 | 火 | 6 | 2周ごとに城へ5 | 1 |
+
+- 強い魔物ほどごほうびが多いが、倒しに行った兵士がやられやすい（大きな見返りには大きなリスク）
+
+### ロジックとUIの約束に足すもの（STEP 3）
+- `getState()`：`round`、`monsters`（`[{ monsterId, type, roadId, square, hp, maxHp, attack, element, attackIn }]`。`attackIn` は城を攻めるまでの残り周回）、`players.pX.coins`
+- 対象：`{ monsterId }`（ファイアボール）
+- メソッド：`canBuyUpgrade(upgradeId)`、`buyUpgrade(upgradeId)`
+- イベント
+  - `roundStarted`：`{ round }` … `turnStarted` のすぐあと
+  - `monsterAppeared`：`{ monsterId, type, roadId, square, hp, attack, element }`
+  - `monsterAttackedCastle`：`{ monsterId, playerId, amount, hp }` … `playerId` は城の持ち主。`amount` は実際に減った量
+  - `monsterClashed`：`{ attacker: { playerId, soldierId }, monsterId, roadId, square }` … 兵士が魔物と戦う（`square` は兵士が止まったマス）
+  - `monsterDamaged`：`{ monsterId, amount, hp, by: { playerId, soldierId? , type? } }`
+  - `monsterDefeated`：`{ monsterId, playerId, reward }` … `playerId` はとどめを刺した人
+  - `coinsChanged`：`{ playerId, delta, coins, reason }` … `reason` は `"reward"` か `"upgrade"`
+  - `upgradeBought`：`{ playerId, upgradeId, cost }` → 効果のイベント（`castleHealed` / `cardDrawn` / `soldierBuffed`）
+  - `soldierBuffed`：`{ playerId, soldierId, attack }`
+- 順番
+  - 周回の始め：`turnStarted` → `roundStarted` → 魔物の城への攻撃（出た順）→ `monsterAppeared`（道の順）→（STEP 2 の `armorExpired`）→ ドロー → 進軍
+  - 兵士と魔物の戦い：`soldierMoved` → `monsterClashed` → `monsterDamaged` → `soldierDamaged`（兵士）→（魔物が0なら）`monsterDefeated` → `coinsChanged` →（兵士が0なら）`soldierDestroyed`
+  - ファイアボールで魔物：`spellCast`（`target` は `monsterId`）→ `monsterDamaged` →（0なら）`monsterDefeated` → `coinsChanged`
+
 ## 全体の設計（STEP 2〜5 の見通し）
 
 STEP 2 以降で作り直しにならないよう、Game をどう広げるかを先に決めておく。**ここに書いた形は「これから作るときの約束」で、各STEPの実装PRで少しずつ入る。** 入った時点で「ロジックとUIの約束」の表に移す。
