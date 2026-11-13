@@ -22,7 +22,7 @@ const idOf = (game, type) => {
 };
 const play = (game, type, target) => game.playCard(idOf(game, type), target);
 const soldiers = (game, pid) => game.getState(null).players[pid].soldiers;
-const after = (log, i) => log.slice(i).map((e) => e.event);
+const after = (log, i) => log.slice(i).map((e) => e.event).filter((e) => e !== 'roundStarted');
 
 test('付加・防御は何枚でも出せる。メインは1ターン1枚', () => {
   const { game } = setup({ p1: ['infantry', 'knight', 'wall', 'pit', 'pit'] });
@@ -155,7 +155,7 @@ test('毒：持ち主の進軍の前にダメージ。回数が終わったら s
   assert.deepEqual(log.at(-1), { event: 'statusApplied', playerId: 'p1', soldierId: 's01', status: 'poison', turns: 3 });
   game.endTurn();
   const i = log.findLastIndex((e) => e.event === 'turnStarted');
-  const seq = log.slice(i).filter((e) => e.event !== 'cardDrawn');
+  const seq = log.slice(i).filter((e) => e.event !== 'cardDrawn' && e.event !== 'roundStarted');
   assert.equal(seq[1].event, 'soldierDamaged');
   assert.deepEqual([seq[1].cause, seq[1].amount, seq[1].hp], ['poison', 1, 4]);
   assert.equal(seq[2].event, 'soldierMoved'); // 毒のあとに動く
@@ -188,7 +188,7 @@ test('凍結：次の進軍で動かず、休んだら statusCleared', () => {
   play(game, 'frostBreath');
   game.endTurn();
   const i = log.findLastIndex((e) => e.event === 'turnStarted');
-  const seq = log.slice(i).map((e) => e.event).filter((e) => e !== 'cardDrawn');
+  const seq = log.slice(i).map((e) => e.event).filter((e) => e !== 'cardDrawn' && e !== 'roundStarted');
   assert.deepEqual(seq, ['turnStarted', 'statusCleared']);
   assert.equal(soldiers(game, 'p1')[0].position, 0);
   game.endTurn(); game.endTurn();

@@ -8,5 +8,7 @@
   "laneLength": 5,
   "elementBonus": 2,
   "trapMaxPosition": 1,
-  "drawPerCardUsed": 1
+  "drawPerCardUsed": 1,
+  "monsterFirstRound": 3,
+  "monsterSpawnChance": 0.35
 }

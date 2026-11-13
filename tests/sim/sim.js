@@ -21,6 +21,8 @@ export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, game
     winner: null,
     turns: 0,
     castleDamage: { soldier: 0, spell: 0, other: 0 },
+    monstersDefeated: 0,
+    monsterCastleDamage: 0,
     spellDamageByType: {},
     clashes: 0,
     discardTurns: 0,
@@ -40,6 +42,8 @@ export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, game
         if (kind === 'spell') stats.spellDamageByType[e.source.type] = (stats.spellDamageByType[e.source.type] || 0) + e.amount;
       }
       if (type === 'soldiersClashed') stats.clashes += 1;
+      if (type === 'monsterDefeated') stats.monstersDefeated += 1;
+      if (type === 'monsterAttackedCastle') stats.monsterCastleDamage += e.amount;
       if (type === 'cardPlayed') stats.played[e.type] = (stats.played[e.type] || 0) + 1;
     });
   }
@@ -49,7 +53,7 @@ export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, game
     return s;
   });
   const strategyOf = (pid) => players[Number(pid.slice(1)) - 1];
-  const ctx = { cards, rules, discardCount: 0 };
+  const ctx = { cards, rules, discardCount: 0, upgrades: gameOptions.upgrades || {} };
   game.on('discardRequired', (e) => { ctx.discardCount = e.count; });
 
   game.start();
@@ -115,6 +119,8 @@ export function summarize(results, strategies) {
     soldierDamageShare: dmg.soldier / totalDmg,
     spellDamageByType: Object.fromEntries(Object.entries(spellBy).map(([k, v]) => [k, v / totalDmg])),
     clashesPerGame: sum((r) => r.clashes) / results.length,
+    monstersDefeatedPerGame: sum((r) => r.monstersDefeated) / results.length,
+    monsterCastleDamagePerGame: sum((r) => r.monsterCastleDamage) / results.length,
     discardRate: sum((r) => r.discardTurns) / (sum((r) => r.mainTurns) || 1),
     choiceRate: sum((r) => r.choiceTurns) / (sum((r) => r.mainTurns) || 1),
     playedPerGame: Object.fromEntries(

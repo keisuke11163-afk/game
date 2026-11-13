@@ -115,6 +115,7 @@ export const STRATEGIES = {
   /** ほどよく考える */
   smart: {
     takeTurn(game, pid, rng, ctx) {
+      buyUpgrades(game, pid, ctx);
       smartTurn(game, pid, ctx);
       playSupports(game, pid, ctx);
     },
@@ -147,12 +148,31 @@ export const STRATEGIES = {
       const { playable, enemies } = view(game, pid);
       const L = ctx.rules.laneLength;
       const near = enemies.some((e) => e.soldiers.some((s) => s.position >= L - 3));
+      buyUpgrades(game, pid, ctx);
       if (!(near && playFirst(game, playable, soldierTypes(ctx)))) smartTurn(game, pid, ctx);
       playSupports(game, pid, ctx);
     },
     chooseDiscard: randomDiscard,
   },
 };
+
+/** コインで強化を買う：城HPが半分より少なければ修理、兵士がいればとぎ石、余れば補充 */
+function buyUpgrades(game, pid, ctx) {
+  const ids = Object.keys(ctx.upgrades);
+  if (!ids.length) return;
+  const by = (effect) => ids.filter((id) => ctx.upgrades[id].effect === effect);
+  for (let i = 0; i < 10; i++) {
+    const me = game.getState(pid).players[pid];
+    const order = [
+      ...(me.castleHp < me.castleMaxHp / 2 ? by('repairCastle') : []),
+      ...by('sharpenSoldiers'),
+      ...by('drawCards'),
+    ];
+    const id = order.find((u) => game.canBuyUpgrade(u).ok);
+    if (!id) return;
+    game.buyUpgrade(id);
+  }
+}
 
 function smartTurn(game, pid, ctx) {
   const { me, enemies, playable } = view(game, pid);

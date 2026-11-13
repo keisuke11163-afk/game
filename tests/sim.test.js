@@ -2,7 +2,7 @@
 // 数字の比べ方は tests/sim/run.js で（こちらは速さのために試合数を少なくしている）。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadJson } from './helpers.js';
+import { loadJson, loadOptionalData } from './helpers.js';
 import { runMany, runMatch } from './sim/sim.js';
 import { STRATEGIES } from './sim/strategies.js';
 
@@ -37,4 +37,15 @@ test('同じシードなら同じ結果になる', () => {
   const a = runMany({ games: 30, seed: 9, cards, rules, strategies: ['smart', 'random'] });
   const b = runMany({ games: 30, seed: 9, cards, rules, strategies: ['smart', 'random'] });
   assert.deepEqual(a, b);
+});
+
+test('魔物と強化ありでも、全試合が決着する（各20試合）', () => {
+  const gameOptions = loadOptionalData();
+  for (const a of names) {
+    for (const b of names) {
+      if (a === 'pass' && b === 'pass') continue;
+      const r = runMany({ games: 20, seed: 5, cards, rules, strategies: [a, b], maxTurns, gameOptions });
+      assert.equal(r.decided, r.games, `${a} vs ${b}`);
+    }
+  }
 });

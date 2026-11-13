@@ -25,6 +25,8 @@ export class Player {
     this.armor = 0;
     /** 伏せたトラップ [{ trapId, roadId, square, type }]（square は道のマス番号） */
     this.traps = [];
+    /** コイン（魔物のとどめでもらう） */
+    this.coins = 0;
   }
 
   findInHand(cardId) {
@@ -53,6 +55,7 @@ export class Player {
       cardsPlayedThisTurn: this.cardsPlayedThisTurn,
       drawNextTurn: this.drawNextTurn,
       armor: this.armor,
+      coins: this.coins,
       traps: this.traps.map((t) => ({ trapId: t.trapId, roadId: t.roadId, square: t.square, type: showHand ? t.type : null })),
       hand: showHand ? this.hand.map((c) => c.toState()) : null,
       handCount: this.hand.length,
