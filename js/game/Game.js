@@ -29,6 +29,7 @@ export const EVENT_TYPES = [
   'cardDiscarded',
   'soldierDeployed',
   'soldierMoved',
+  'soldiersClashed',
   'soldierDamaged',
   'soldierDestroyed',
   'spellCast',
@@ -203,21 +204,44 @@ export class Game {
     this.advanceSoldiers(player);
   }
 
-  /** 出した順に1体ずつ進める。城に着いたら 移動 → 城にダメージ → 消える */
+  /**
+   * 進軍：出した順に1体ずつ、1マスずつ進める。
+   * 進む前と1マス進むごとに「同じマスか1つ先のマス」に相手の兵士がいないか確かめ、いたら止まって戦う。
+   * 戦ったら（相手だけが消えても）そのターンはその場で止まる。
+   * 城に着いたら 移動 → 城にダメージ → 消える。城が落ちたらその場でゲームを止める。
+   */
   advanceSoldiers(player) {
     const enemy = this.opponentOf(player.id);
     const { laneLength } = this.rules;
 
     for (const soldier of [...player.soldiers]) {
-      const { from, to } = soldier.advance();
+      if (!player.soldiers.includes(soldier)) continue; // 念のため（自分の番に自分の兵士が先に消えることはない）
+
+      const from = soldier.position;
+      let opponent = this.findClashTarget(soldier, enemy);
+      let steps = 0;
+      while (!opponent && steps < soldier.speed) {
+        soldier.moveForward();
+        steps += 1;
+        if (soldier.hasReachedCastle(laneLength)) break;
+        opponent = this.findClashTarget(soldier, enemy);
+      }
+
       const reached = soldier.hasReachedCastle(laneLength);
-      // 城に着いた兵士は城の位置（laneLength）まで動いたことにする
-      this.emit('soldierMoved', {
-        playerId: player.id,
-        soldierId: soldier.soldierId,
-        from,
-        to: reached ? laneLength : to,
-      });
+      if (steps > 0) {
+        // 城に着いた兵士は城の位置（laneLength）まで動いたことにする
+        this.emit('soldierMoved', {
+          playerId: player.id,
+          soldierId: soldier.soldierId,
+          from,
+          to: reached ? laneLength : soldier.position,
+        });
+      }
+
+      if (opponent) {
+        this.fight(player, soldier, enemy, opponent);
+        continue;
+      }
       if (!reached) continue;
 
       enemy.castle.takeDamage(soldier.attack);
@@ -236,6 +260,59 @@ export class Game {
 
       // 城が落ちた瞬間にゲームを止める（残りの兵士は動かさない）
       if (this.checkGameOver()) return;
+    }
+  }
+
+  /** 自分から数えた位置 → 道のマス番号（p1 の城側が 0） */
+  toSquare(playerId, position) {
+    return playerId === PLAYER_IDS[0] ? position : this.rules.laneLength - 1 - position;
+  }
+
+  /**
+   * soldier の「同じマスか1つ先のマス」にいる相手の兵士のうち、先に出された1体（いなければ null）。
+   * enemy.soldiers は出した順に並んでいるので、最初に見つかったものが先に出された兵士。
+   */
+  findClashTarget(soldier, enemy) {
+    const { laneLength } = this.rules;
+    const here = soldier.position;
+    return (
+      enemy.soldiers.find((e) => {
+        const q = laneLength - 1 - e.position; // 相手の兵士の位置を、soldier から数えた位置に直す
+        return q === here || q === here + 1;
+      }) || null
+    );
+  }
+
+  /** 進軍中の attacker と、相手の defender が戦う。お互いに攻撃力ぶんのダメージを同時に与える */
+  fight(player, attacker, enemy, defender) {
+    this.emit('soldiersClashed', {
+      attacker: { playerId: player.id, soldierId: attacker.soldierId },
+      defender: { playerId: enemy.id, soldierId: defender.soldierId },
+      square: this.toSquare(player.id, attacker.position), // 攻める側が止まったマス
+    });
+
+    const toDefender = attacker.attack;
+    const toAttacker = defender.attack;
+    defender.takeDamage(toDefender);
+    attacker.takeDamage(toAttacker);
+    this.emit('soldierDamaged', {
+      playerId: enemy.id,
+      soldierId: defender.soldierId,
+      amount: toDefender,
+      hp: defender.hp,
+    });
+    this.emit('soldierDamaged', {
+      playerId: player.id,
+      soldierId: attacker.soldierId,
+      amount: toAttacker,
+      hp: attacker.hp,
+    });
+
+    // 消える順番は soldierDamaged と同じ（守る側 → 攻める側）
+    for (const [owner, s] of [[enemy, defender], [player, attacker]]) {
+      if (!s.isDead) continue;
+      owner.removeSoldier(s.soldierId);
+      this.emit('soldierDestroyed', { playerId: owner.id, soldierId: s.soldierId, reason: 'killed' });
     }
   }
 
@@ -259,7 +336,7 @@ export class Game {
     if (card.isSpell) {
       const enemy = this.opponentOf(player.id);
       if (card.def.effect === 'damageEnemySoldiers' && enemy.soldiers.length === 0) {
-        return fail('相手のレーンに兵士がいません');
+        return fail('道の上に相手の兵士がいません');
       }
       if (card.def.effect === 'healOwnCastle' && player.castle.isFull) {
         return fail('城のHPが満タンです');
