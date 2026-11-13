@@ -85,7 +85,8 @@ export class Game {
     this.players = {};
     // 後攻（p2）は城HPが secondPlayerCastleBonus だけ多い状態で始まる（上限も同じだけ高い）。先攻有利をやわらげるため
     this.playerOrder.forEach((id, seat) => {
-      const bonus = seat === 0 ? 0 : this.rules.secondPlayerCastleBonus;
+      // 2人用のボーナス。3人以上の席ごとのボーナスは STEP 5 で決める（seatCastleBonus）
+      const bonus = this.playerOrder.length === 2 && seat === 1 ? this.rules.secondPlayerCastleBonus : 0;
       this.players[id] = new Player(id, this.rules.castleMaxHp + bonus);
     });
     /** @type {Road[]} */
@@ -223,6 +224,7 @@ export class Game {
 
   /**
    * まだ負けていない人を輪にならべ、となりどうしを道でつなぐ。2人なら1本。今ある道はそのまま残す。
+   * 負けた人が出たときの呼び出し（なくなった道の兵士を消す処理を含む）は STEP 5 で入れる。今は new Game() からだけ呼ぶ。
    * @returns {{opened: Road[], closed: Road[]}}
    */
   rebuildRoads() {
@@ -455,7 +457,9 @@ export class Game {
       if (targets.length === 1) return { ok: true, target: targets[0] };
       return { ok: true, target: null, needsTarget: true };
     }
-    const same = (a, b) => Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => a[k] === b[k]);
+    // 値が undefined のキーは無いものとして比べる（UI がオブジェクトを組み立てて渡しても困らないように）
+    const keys = (o) => Object.keys(o).filter((k) => o[k] !== undefined);
+    const same = (a, b) => keys(a).length === keys(b).length && keys(b).every((k) => a[k] === b[k]);
     const found = typeof target === 'object' ? targets.find((t) => same(t, target)) : null;
     if (!found) return fail('そこには出せません');
     return { ok: true, target: found };
@@ -628,8 +632,8 @@ export class Game {
     if (this.phase === 'gameOver') return true;
     const loser = this.alivePlayerIds().find((id) => this.players[id].castle.isDestroyed);
     if (!loser) return false;
-    // 2人：城が残っている方の勝ち
-    this.winner = this.opponentsOf(loser)[0].id;
+    // 城を削れるのは手番の人の行動だけなので、勝つのは手番の人（2人なら、城が残っている方）
+    this.winner = this.currentPlayer;
     this.phase = 'gameOver';
     this.emit('gameOver', { winner: this.winner });
     return true;
