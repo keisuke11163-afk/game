@@ -2,7 +2,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game, EVENT_TYPES } from '../js/game/Game.js';
+import { Player } from '../js/game/Player.js';
 import { buildData, seededRng, recordEvents } from './helpers.js';
+
+/** テストのために3人のゲームを作る（人数の設定は STEP 5 で入る。それまでは内部を組み立てる） */
+function threePlayers() {
+  const { cards, rules } = buildData({ source: 'fixture' });
+  const game = new Game({ cards, rules, rng: seededRng(2) });
+  game.playerOrder = ['p1', 'p2', 'p3'];
+  game.players.p3 = new Player('p3', rules.castleMaxHp);
+  game.rebuildRoads();
+  game.debugSetDeck(Array(20).fill('heal'));
+  return game;
+}
 
 function setup({ p1 = [], p2 = [], deck = [] } = {}) {
   const { cards, rules } = buildData({ source: 'fixture' });
@@ -86,4 +98,52 @@ test('roads は rebuildRoads で輪になる（3人以上の準備）', () => {
   assert.deepEqual(r2.closed.map((r) => r.roadId).sort(), ['p1-p2', 'p2-p3']);
   assert.equal(game.nextPlayerAfter('p1'), 'p3');
   assert.equal(game.nextPlayerAfter('p3'), 'p1');
+});
+
+test('3人：兵士はとなりの人だけ、ファイアボールは全員、対象が2つ以上なら needsTarget', () => {
+  const game = threePlayers();
+  game.debugSetHand('p1', ['infantry', 'fireball']);
+  game.start();
+  const inf = idOf(game, 'p1', 'infantry');
+  const fb = idOf(game, 'p1', 'fireball');
+  assert.deepEqual(game.getTargets(inf), [{ playerId: 'p2' }, { playerId: 'p3' }]); // 3人なら全員となり
+  assert.deepEqual(game.canPlayCard(fb), { ok: true, needsTarget: true });
+  const before = JSON.stringify(game.getState('p1'));
+  const r = game.playCard(fb);
+  assert.deepEqual(r, { ok: false, reason: '対象を選んでください', needsTarget: true });
+  assert.equal(JSON.stringify(game.getState('p1')), before); // 手札も playedThisTurn も変わらない
+  assert.equal(game.playCard(fb, { playerId: 'p3', extra: undefined }).ok, true);
+  assert.equal(game.getState(null).players.p3.castleHp, 17);
+});
+
+test('3人：別の道の兵士とはぶつからない。手番の人が城を落としたら、その人の勝ち', () => {
+  const game = threePlayers();
+  const log = recordEvents(game, EVENT_TYPES);
+  game.debugSetHand('p1', ['knight']);
+  game.debugSetHand('p2', ['knight']);
+  game.debugSetHand('p3', ['fireball']);
+  game.start();
+  game.playCard(idOf(game, 'p1', 'knight'), { playerId: 'p3' }); // 道 p1-p3
+  game.endTurn();
+  game.playCard(idOf(game, 'p2', 'knight'), { playerId: 'p3' }); // 道 p2-p3
+  game.endTurn(); game.endTurn();
+  game.endTurn(); // p2 の騎士が進む。p1 の騎士とは道が違うのでぶつからない
+  assert.equal(log.filter((e) => e.event === 'soldiersClashed').length, 0);
+  game.debugSetCastleHp('p2', 3);
+  game.endTurn(); // p3
+  game.playCard(idOf(game, 'p3', 'fireball'), { playerId: 'p2' });
+  assert.equal(game.getState(null).winner, 'p3');
+});
+
+test('getTargets は捨てる場面とゲーム終了後は空', () => {
+  const { game } = setup({ p1: [...Array(8).fill('infantry'), 'fireball'], deck: Array(5).fill('heal') });
+  const fb = idOf(game, 'p1', 'fireball');
+  game.endTurn();
+  assert.deepEqual(game.getTargets(fb), []);
+  const ids = game.getState('p1').players.p1.hand.map((c) => c.cardId).filter((id) => id !== fb);
+  game.discard(ids.slice(0, 2));
+  game.endTurn();
+  game.debugSetCastleHp('p2', 1);
+  game.playCard(fb);
+  assert.deepEqual(game.getTargets(fb), []);
 });
