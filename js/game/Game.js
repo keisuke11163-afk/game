@@ -18,7 +18,8 @@
 //                超えていなければ（または捨て終わったら）次の人のターンが始まる
 //   城HPが0以下になった瞬間に phase "gameOver"
 
-import { Card } from './Card.js';
+import { Card, ELEMENTS } from './Card.js';
+import { Monster, validateUpgrades } from './Monster.js';
 import { Soldier } from './Soldier.js';
 import { Player } from './Player.js';
 import { Road } from './Road.js';
@@ -48,6 +49,15 @@ export const EVENT_TYPES = [
   'armorExpired',
   'statusApplied',
   'statusCleared',
+  'roundStarted',
+  'monsterAppeared',
+  'monsterAttackedCastle',
+  'monsterClashed',
+  'monsterDamaged',
+  'monsterDefeated',
+  'coinsChanged',
+  'upgradeBought',
+  'soldierBuffed',
   'gameOver',
 ];
 
@@ -68,10 +78,16 @@ const RULE_KEYS = {
 /** rules.json の省略できる項目と、省略したときの値 */
 const OPTIONAL_RULES = {
   elementBonus: 0, // 属性が強いときに増えるダメージ
+  monsterFirstRound: 3, // 魔物が出はじめる周回
+  monsterCooldownRounds: 0, // 魔物を倒した道に、次の魔物が出ない周回の数
   // 戦いで相手だけが消えたら、残りの歩数を進み続ける（false なら、そのターンはその場で止まる）
   advanceAfterWin: false,
   // 城に着いた兵士が与えるダメージ ＝ 攻撃力 × この値
   soldierCastleDamageMultiplier: 1,
+};
+/** 0以上1以下の数（整数でなくてよい）の省略できる項目 */
+const OPTIONAL_RATE_RULES = {
+  monsterSpawnChance: 0, // 周回の始めに、魔物がいない道ごとに魔物が出る確率
 };
 
 const ok = () => ({ ok: true });
@@ -83,18 +99,33 @@ export class Game {
    * @param {object} options.cards data/cards.json の中身
    * @param {object} options.rules data/rules.json の中身
    * @param {() => number} [options.rng] 0以上1未満を返す乱数。省略すると Math.random
+   * @param {object} [options.monsters] data/monsters.json の中身。省略すると魔物は出ない
+   * @param {object} [options.upgrades] data/upgrades.json の中身。省略すると強化は買えない
    */
-  constructor({ cards, rules, rng = Math.random } = {}) {
+  constructor({ cards, rules, rng = Math.random, monsters = null, upgrades = null } = {}) {
     Card.validateDefinitions(cards);
     Game.validateRules(rules);
     if (typeof rng !== 'function') throw new Error('rng は 0以上1未満の数を返す関数にしてください');
+    if (monsters !== null) {
+      Monster.validateDefinitions(monsters, ELEMENTS);
+      if (rules.laneLength % 2 === 0) throw new Error('魔物を使うときは、真ん中のマスがひとつに決まるよう rules.json の laneLength を奇数にしてください');
+    }
+    if (upgrades !== null) validateUpgrades(upgrades);
 
     this.cardDefs = cards;
-    this.rules = { ...OPTIONAL_RULES, ...rules };
+    this.monsterDefs = monsters;
+    this.upgradeDefs = upgrades || {};
+    this.rules = { ...OPTIONAL_RULES, ...OPTIONAL_RATE_RULES, ...rules };
     this.rng = rng;
 
     this.nextCardNumber = 1;
     this.nextSoldierNumber = 1;
+    this.nextMonsterNumber = 1;
+    /** @type {Monster[]} */
+    this.monsters = [];
+    /** 道ID → この周回より前には魔物が出ない */
+    this.monsterCooldown = new Map();
+    this.round = 0;
     /** @type {Map<string, Set<Function>>} */
     this.listeners = new Map(EVENT_TYPES.map((type) => [type, new Set()]));
 
@@ -136,8 +167,17 @@ export class Game {
 
   static validateRules(rules) {
     if (!rules || typeof rules !== 'object') throw new Error('rules.json の中身を渡してください');
-    if (rules.elementBonus !== undefined && (!Number.isInteger(rules.elementBonus) || rules.elementBonus < 0)) {
-      throw new Error('rules.json の elementBonus は 0 以上の整数にしてください（書かなければ 0）');
+    for (const key of ['elementBonus', 'monsterFirstRound', 'monsterCooldownRounds']) {
+      const v = rules[key];
+      if (v !== undefined && (!Number.isInteger(v) || v < 0)) {
+        throw new Error(`rules.json の ${key} は 0 以上の整数にしてください（書かなければ ${OPTIONAL_RULES[key]}）`);
+      }
+    }
+    for (const key of Object.keys(OPTIONAL_RATE_RULES)) {
+      const v = rules[key];
+      if (v !== undefined && (typeof v !== 'number' || !(v >= 0 && v <= 1))) {
+        throw new Error(`rules.json の ${key} は 0 以上 1 以下の数にしてください`);
+      }
     }
     if (rules.advanceAfterWin !== undefined && typeof rules.advanceAfterWin !== 'boolean') {
       throw new Error('rules.json の advanceAfterWin は true か false にしてください（書かなければ false）');
@@ -310,6 +350,16 @@ export class Game {
     player.cardsPlayedThisTurn = 0;
     this.emit('turnStarted', { playerId, turn: this.turn });
 
+    // 周回の始め（席順の最初の人のターン）：魔物が城を攻める → 魔物が出る
+    if (playerId === this.alivePlayerIds()[0]) {
+      this.round += 1;
+      this.emit('roundStarted', { round: this.round });
+      this.monstersAttackCastles();
+      // 魔物に城を落とされたら、そこで止める（魔物の出現・ドロー・進軍はしない）
+      if (this.checkGameOver()) return;
+      this.spawnMonsters();
+    }
+
     // 城壁は、自分の次のターンの始めに消える
     if (player.armor > 0) {
       player.armor = 0;
@@ -367,17 +417,20 @@ export class Game {
 
       let steps = 0;
       let reached = false;
+      let monster = null;
       // advanceAfterWin のときは、戦って相手だけが消えたら、残りの歩数でもう一度進む
       for (;;) {
         const from = soldier.position;
         let opponent = this.findClashTarget(soldier, enemy);
+        monster = opponent ? null : this.findMonsterInRange(soldier, player);
         let moved = 0;
-        while (!opponent && steps < soldier.speed) {
+        while (!opponent && !monster && steps < soldier.speed) {
           soldier.moveForward();
           steps += 1;
           moved += 1;
           if (soldier.hasReachedCastle(laneLength)) break;
           opponent = this.findClashTarget(soldier, enemy);
+          if (!opponent) monster = this.findMonsterInRange(soldier, player);
         }
         reached = soldier.hasReachedCastle(laneLength);
         if (moved > 0) {
@@ -394,6 +447,10 @@ export class Game {
         this.fight(player, soldier, enemy, opponent);
         const keepGoing = this.rules.advanceAfterWin && opponent.isDead && !soldier.isDead && steps < soldier.speed;
         if (!keepGoing) break;
+      }
+      if (monster) {
+        this.fightMonster(player, soldier, monster);
+        continue;
       }
       if (!reached) continue;
 
@@ -449,6 +506,151 @@ export class Game {
         return q === here || q === here + 1;
       }) || null
     );
+  }
+
+  // ================= 魔物 =================
+
+  /** 道の真ん中のマス番号 */
+  middleSquare() {
+    return Math.floor(this.rules.laneLength / 2);
+  }
+
+  /** owner の兵士 soldier の「同じマスか1つ先のマス」にいる魔物（同じ道の上だけ） */
+  findMonsterInRange(soldier, owner) {
+    const road = this.findRoad(soldier.roadId);
+    return (
+      this.monsters.find((m) => {
+        if (m.roadId !== road.roadId) return false;
+        const q = road.toPosition(owner.id, m.square);
+        return q === soldier.position || q === soldier.position + 1;
+      }) || null
+    );
+  }
+
+  findMonster(monsterId) {
+    return this.monsters.find((m) => m.monsterId === monsterId) || null;
+  }
+
+  /** 周回の始め：attackIn が0になった魔物が、道の両はしのどちらかの城を攻める（城を落としてもよい。落ちたらそこで止める） */
+  monstersAttackCastles() {
+    for (const m of [...this.monsters]) {
+      m.attackIn -= 1;
+      if (m.attackIn > 0) continue;
+      m.attackIn = m.def.attackEvery;
+      const road = this.findRoad(m.roadId);
+      const victim = this.players[road.players[Math.floor(this.rng() * 2)]];
+      const before = victim.castle.hp;
+      victim.castle.takeDamage(m.def.castleAttack);
+      this.emit('monsterAttackedCastle', {
+        monsterId: m.monsterId, playerId: victim.id, amount: before - victim.castle.hp, hp: victim.castle.hp,
+      });
+      if (victim.castle.isDestroyed) return;
+    }
+  }
+
+  /** 周回の始め：魔物がいない道ごとに、monsterSpawnChance の確率で1体出る */
+  spawnMonsters() {
+    if (!this.monsterDefs || this.round < this.rules.monsterFirstRound || this.rules.monsterSpawnChance === 0) return;
+    const types = Object.keys(this.monsterDefs);
+    if (types.length === 0) return;
+    for (const road of this.roads) {
+      if (this.monsters.some((m) => m.roadId === road.roadId)) continue;
+      // 魔物を倒した道には、しばらく出ない（魔物が道をふさぎ続けないように）
+      if ((this.monsterCooldown.get(road.roadId) ?? 0) > this.round) continue;
+      if (this.rng() >= this.rules.monsterSpawnChance) continue;
+      const total = types.reduce((a, t) => a + this.monsterDefs[t].weight, 0);
+      let r = this.rng() * total;
+      const type = types.find((t) => (r -= this.monsterDefs[t].weight) < 0) ?? types.at(-1);
+      const monsterId = `m${String(this.nextMonsterNumber++).padStart(2, '0')}`;
+      const m = new Monster(monsterId, type, this.monsterDefs[type], road.roadId, this.middleSquare());
+      this.monsters.push(m);
+      this.emit('monsterAppeared', {
+        monsterId, type, roadId: road.roadId, square: m.square, hp: m.hp, attack: m.attack, element: m.element,
+      });
+    }
+  }
+
+  /** 魔物にダメージ。0になったら、by.playerId がとどめボーナスをもらう */
+  damageMonster(monster, amount, by) {
+    monster.takeDamage(amount);
+    this.emit('monsterDamaged', { monsterId: monster.monsterId, amount, hp: monster.hp, by });
+  }
+
+  defeatMonsterIfDead(monster, playerId) {
+    if (!monster.isDead) return;
+    this.monsters = this.monsters.filter((m) => m !== monster);
+    this.monsterCooldown.set(monster.roadId, this.round + this.rules.monsterCooldownRounds + 1);
+    const reward = monster.def.reward;
+    this.emit('monsterDefeated', { monsterId: monster.monsterId, playerId, reward });
+    this.changeCoins(this.players[playerId], reward, 'reward');
+  }
+
+  changeCoins(player, delta, reason) {
+    player.coins += delta;
+    this.emit('coinsChanged', { playerId: player.id, delta, coins: player.coins, reason });
+  }
+
+  /** 進軍中の兵士が魔物と戦う（お互いに同時に与える。属性も効く） */
+  fightMonster(player, soldier, monster) {
+    const road = this.findRoad(soldier.roadId);
+    this.emit('monsterClashed', {
+      attacker: { playerId: player.id, soldierId: soldier.soldierId },
+      monsterId: monster.monsterId,
+      roadId: road.roadId,
+      square: road.toSquare(player.id, soldier.position),
+    });
+    const toMonster = this.fightDamage(soldier, monster);
+    const toSoldier = this.fightDamage(monster, soldier);
+    this.damageMonster(monster, toMonster, { playerId: player.id, soldierId: soldier.soldierId });
+    const blocked = soldier.takeDamage(toSoldier);
+    this.emit('soldierDamaged', {
+      playerId: player.id, soldierId: soldier.soldierId, amount: toSoldier, hp: soldier.hp, cause: 'fight', blocked,
+    });
+    this.defeatMonsterIfDead(monster, player.id);
+    if (soldier.isDead) this.removeSoldier(player, soldier, 'killed');
+  }
+
+  // ================= コインと強化 =================
+
+  /** 強化を買えるか（読むだけ） */
+  canBuyUpgrade(upgradeId) {
+    if (this.phase === 'ready') return fail('ゲームがまだ始まっていません');
+    if (this.phase === 'gameOver') return fail('ゲームは終わっています');
+    if (this.phase !== 'main') return fail('今は買えません');
+    // Object のプロトタイプのキー（"constructor" など）を強化と取り違えないように
+    if (typeof upgradeId !== 'string' || !Object.hasOwn(this.upgradeDefs, upgradeId)) return fail('その強化はありません');
+    const def = this.upgradeDefs[upgradeId];
+    const player = this.players[this.currentPlayer];
+    const bought = player.upgradesBought[upgradeId] ?? 0;
+    if (def.limit !== undefined && bought >= def.limit) return fail(`この強化は1試合に${def.limit}回までです`);
+    if (player.coins < def.cost) return fail(`コインが足りません（あと${def.cost - player.coins}枚）`);
+    if (def.effect === 'repairCastle' && player.castle.isFull) return fail('城のHPが満タンです');
+    if (def.effect === 'drawCards' && this.deck.length + this.discardPile.length === 0) return fail('山札も捨て札もありません');
+    if (def.effect === 'sharpenSoldiers' && player.soldiers.length === 0) return fail('道の上に自分の兵士がいません');
+    return ok();
+  }
+
+  /** 強化を買う（自分のメインの場面で、何回でも） */
+  buyUpgrade(upgradeId) {
+    const check = this.canBuyUpgrade(upgradeId);
+    if (!check.ok) return check;
+    const def = this.upgradeDefs[upgradeId];
+    const player = this.players[this.currentPlayer];
+    player.upgradesBought[upgradeId] = (player.upgradesBought[upgradeId] ?? 0) + 1;
+    this.changeCoins(player, -def.cost, 'upgrade');
+    this.emit('upgradeBought', { playerId: player.id, upgradeId, cost: def.cost });
+    if (def.effect === 'repairCastle') {
+      const healed = player.castle.heal(def.amount);
+      this.emit('castleHealed', { playerId: player.id, amount: healed, hp: player.castle.hp });
+    } else if (def.effect === 'drawCards') {
+      this.drawCards(player, def.amount);
+    } else if (def.effect === 'sharpenSoldiers') {
+      for (const s of player.soldiers) {
+        s.baseAttack += def.amount;
+        this.emit('soldierBuffed', { playerId: player.id, soldierId: s.soldierId, attack: s.attack });
+      }
+    }
+    return ok();
   }
 
   /** a が b に与えるダメージ（攻撃力 ＋ 属性が強ければ elementBonus） */
@@ -509,7 +711,14 @@ export class Game {
     const hasSoldiers = (p) => p.soldiers.length > 0;
     switch (def.effect) {
       case 'damageEnemyCastle':
-        return { targets: playerTargets(this.opponentsOf(player.id)), reason: '相手がいません' };
+        return {
+          targets: [
+            ...playerTargets(this.opponentsOf(player.id)),
+            // 魔物は、自分の道（自分が両はしのどちらか）にいるものだけ
+            ...this.monsters.filter((m) => this.findRoad(m.roadId).has(player.id)).map((m) => ({ monsterId: m.monsterId })),
+          ],
+          reason: '相手がいません',
+        };
       case 'damageEnemySoldiers':
         return {
           targets: playerTargets(this.opponentsOf(player.id).filter(hasSoldiers)),
@@ -638,6 +847,11 @@ export class Game {
         hp: soldier.hp,
         attack: soldier.attack,
       });
+    } else if (card.isSpell && resolved.target.monsterId) {
+      const monster = this.findMonster(resolved.target.monsterId);
+      this.emit('spellCast', { playerId: player.id, type: card.type, target: monster.monsterId, targetKind: 'monster' });
+      this.damageMonster(monster, card.def.amount, { playerId: player.id, type: card.type });
+      this.defeatMonsterIfDead(monster, player.id);
     } else if (card.isSpell) {
       this.castSpell(player, card, this.players[resolved.target.playerId]);
     } else {
@@ -654,18 +868,18 @@ export class Game {
 
     switch (effect) {
       case 'damageEnemyCastle':
-        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id });
+        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id, targetKind: 'player' });
         this.damageCastle(enemy, amount, { kind: 'spell', type: card.type });
         break;
 
       case 'damageEnemySoldiers':
-        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id });
+        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id, targetKind: 'player' });
         for (const soldier of [...enemy.soldiers]) this.damageSoldier(enemy, soldier, amount, 'spell');
         break;
 
       case 'poisonEnemySoldiers':
       case 'freezeEnemySoldiers': {
-        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id });
+        this.emit('spellCast', { playerId: player.id, type: card.type, target: enemy.id, targetKind: 'player' });
         const status = effect === 'poisonEnemySoldiers' ? 'poison' : 'frozen';
         for (const soldier of enemy.soldiers) {
           // 重ねがけでは増えない：残りの回数を長い方にそろえる
@@ -682,7 +896,7 @@ export class Game {
       }
 
       case 'healOwnCastle': {
-        this.emit('spellCast', { playerId: player.id, type: card.type, target: player.id });
+        this.emit('spellCast', { playerId: player.id, type: card.type, target: player.id, targetKind: 'player' });
         const healed = player.castle.heal(amount);
         this.emit('castleHealed', { playerId: player.id, amount: healed, hp: player.castle.hp });
         break;
@@ -771,8 +985,12 @@ export class Game {
     if (this.phase === 'gameOver') return true;
     const loser = this.alivePlayerIds().find((id) => this.players[id].castle.isDestroyed);
     if (!loser) return false;
-    // 城を削れるのは手番の人の行動だけなので、勝つのは手番の人（2人なら、城が残っている方）
-    this.winner = this.currentPlayer;
+    // 2人なら、城が残っている方の勝ち（魔物に自分の城を落とされた手番の人は負け）。
+    // 手番の人の城が残っていれば手番の人の勝ち（3人以上のときの扱いは STEP 5 で決める）
+    const standing = (id) => !this.players[id].castle.isDestroyed;
+    this.winner = standing(this.currentPlayer)
+      ? this.currentPlayer
+      : this.alivePlayerIds().find(standing);
     this.phase = 'gameOver';
     this.emit('gameOver', { winner: this.winner });
     return true;
@@ -789,6 +1007,8 @@ export class Game {
     for (const id of this.playerOrder) players[id] = this.players[id].toState(id === viewerId);
     return {
       playerOrder: [...this.playerOrder],
+      round: this.round,
+      monsters: this.monsters.map((m) => m.toState()),
       roads: this.roads.map((r) => r.toState()),
       turn: this.turn,
       currentPlayer: this.currentPlayer,

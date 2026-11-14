@@ -8,5 +8,8 @@
   "laneLength": 3,
   "advanceAfterWin": false,
   "soldierCastleDamageMultiplier": 2,
-  "elementBonus": 2
+  "elementBonus": 2,
+  "monsterFirstRound": 3,
+  "monsterCooldownRounds": 2,
+  "monsterSpawnChance": 0.35
 }

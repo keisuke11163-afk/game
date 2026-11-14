@@ -31,6 +31,18 @@ export function buildData({ rules: rulesPatch = {}, cards: cardsPatch = {}, sour
   return { rules, cards };
 }
 
+/** data/ の魔物と強化（STEP 3）。ファイルがなければ null */
+export function loadOptionalData() {
+  const read = (name) => {
+    try {
+      return loadJson(name);
+    } catch {
+      return null;
+    }
+  };
+  return { monsters: read('monsters.json'), upgrades: read('upgrades.json') };
+}
+
 /** シード付きの乱数（mulberry32）。同じシードなら同じ並びになる */
 export function seededRng(seed) {
   let a = seed >>> 0;

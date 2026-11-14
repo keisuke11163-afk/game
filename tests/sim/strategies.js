@@ -19,8 +19,16 @@ function view(game, pid) {
 function playWith(game, cardId, chooseTarget) {
   const targets = game.getTargets(cardId);
   if (targets.length === 0) return false;
-  const t = chooseTarget ? chooseTarget(targets) : targets[0];
+  // 省略したら、いちばん城HPの割合が少ない相手（魔物は選ばない）
+  const t = chooseTarget ? chooseTarget(targets) : weakest(game, targets);
   return t ? game.playCard(cardId, t).ok : false;
+}
+
+function weakest(game, targets) {
+  const players = targets.filter((t) => t.playerId);
+  if (!players.length) return targets[0];
+  const st = game.getState(null).players;
+  return players.reduce((a, b) => (st[b.playerId].castleHp / st[b.playerId].castleMaxHp < st[a.playerId].castleHp / st[a.playerId].castleMaxHp ? b : a));
 }
 
 /** 種類の優先順に、出せる最初のカードを出す */
@@ -113,6 +121,7 @@ export const STRATEGIES = {
   /** ほどよく考える */
   smart: {
     takeTurn(game, pid, rng, ctx) {
+      buyUpgrades(game, pid, ctx);
       smartTurn(game, pid, ctx);
       playSupports(game, pid, ctx);
     },
@@ -147,6 +156,7 @@ export const STRATEGIES = {
       const { playable, enemies } = view(game, pid);
       const L = ctx.rules.laneLength;
       const near = enemies.some((e) => e.soldiers.some((s) => s.position >= L - 3));
+      buyUpgrades(game, pid, ctx);
       if (!(near && playFirst(game, playable, soldierTypes(ctx)))) smartTurn(game, pid, ctx);
       playSupports(game, pid, ctx);
     },
@@ -154,10 +164,39 @@ export const STRATEGIES = {
   },
 };
 
+/** コインで強化を買う：城HPが半分より少なければ修理、兵士がいればとぎ石、余れば補充 */
+function buyUpgrades(game, pid, ctx) {
+  const ids = Object.keys(ctx.upgrades);
+  if (!ids.length) return;
+  const by = (effect) => ids.filter((id) => ctx.upgrades[id].effect === effect);
+  for (let i = 0; i < 10; i++) {
+    const me = game.getState(pid).players[pid];
+    const order = [
+      ...(me.castleHp < me.castleMaxHp / 2 ? by('repairCastle') : []),
+      ...by('sharpenSoldiers'),
+      ...by('drawCards'),
+    ];
+    const id = order.find((u) => game.canBuyUpgrade(u).ok);
+    if (!id) return;
+    game.buyUpgrade(id);
+  }
+}
+
 function smartTurn(game, pid, ctx) {
   const { me, enemies, playable } = view(game, pid);
   const enemy = enemies[0];
   const castleSpells = typesWithEffect(ctx, 'damageEnemyCastle');
+  // 自分の道の、ごほうびの多い魔物（5コイン以上）にとどめを刺せるなら、魔物を狙う
+  // （ファイアボールは城を削るいちばんの手段なので、小さな魔物には使わない）
+  for (const c of playable.filter((x) => castleSpells.includes(x.type))) {
+    const ms = game.getTargets(c.cardId).filter((t) => t.monsterId);
+    const st = game.getState(pid);
+    const kill = ms.find((t) => {
+      const m = st.monsters.find((x) => x.monsterId === t.monsterId);
+      return m.hp <= ctx.cards[c.type].amount && m.reward >= 5;
+    });
+    if (kill && game.playCard(c.cardId, kill).ok) return;
+  }
   // とどめになるなら城への魔法
   for (const t of castleSpells) {
     if (enemy && ctx.cards[t].amount >= enemy.castleHp && playFirst(game, playable, [t])) return;

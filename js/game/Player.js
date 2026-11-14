@@ -21,6 +21,10 @@ export class Player {
     this.cardsPlayedThisTurn = 0;
     /** 城壁の残り。次の自分のターンの始めに消える */
     this.armor = 0;
+    /** コイン（魔物のとどめでもらう） */
+    this.coins = 0;
+    /** 強化ID → 買った回数 */
+    this.upgradesBought = {};
   }
 
   findInHand(cardId) {
@@ -48,6 +52,7 @@ export class Player {
       eliminated: this.eliminated,
       cardsPlayedThisTurn: this.cardsPlayedThisTurn,
       armor: this.armor,
+      coins: this.coins,
       hand: showHand ? this.hand.map((c) => c.toState()) : null,
       handCount: this.hand.length,
       playedThisTurn: this.playedThisTurn,

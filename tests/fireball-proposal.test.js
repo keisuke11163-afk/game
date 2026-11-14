@@ -33,7 +33,7 @@ test('advanceAfterWin：相手だけ消えたら残りの歩数で進む', () =>
   game.players.p2.soldiers[0].position = 3; // 道のマス1
   game.endTurn(); // p1 騎士：位置0、1つ先（マス1）に相手 → 動かずに戦う → 倒して3マス進む
   const tail = log.slice(log.findLastIndex((e) => e.event === 'turnStarted'));
-  const seq = tail.filter((e) => e.event !== 'cardDrawn').map((e) => e.event);
+  const seq = tail.filter((e) => e.event !== 'cardDrawn' && e.event !== 'roundStarted').map((e) => e.event);
   assert.deepEqual(seq, ['turnStarted', 'soldiersClashed', 'soldierDamaged', 'soldierDamaged', 'soldierDestroyed', 'soldierMoved']);
   const moved = tail.find((e) => e.event === 'soldierMoved');
   assert.deepEqual([moved.from, moved.to], [0, 3]);

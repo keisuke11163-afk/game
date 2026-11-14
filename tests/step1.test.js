@@ -22,7 +22,8 @@ function setup({ p1 = [], p2 = [], deck = [], rules = {}, cards = {} } = {}) {
   return { game, log };
 }
 
-const types = (log) => log.map((e) => e.event);
+// roundStarted（STEP 3 で増えた、周回の始めのイベント）は、STEP 1 の順番の確認では見ない
+const types = (log) => log.map((e) => e.event).filter((e) => e !== 'roundStarted');
 const handId = (game, pid, type) => game.getState(pid).players[pid].hand.find((c) => c.type === type).cardId;
 const play = (game, type) => game.playCard(handId(game, game.currentPlayer, type));
 
@@ -70,7 +71,7 @@ test('getState(null) は両方の手札が null', () => {
 test('start: turnStarted → cardDrawn（先攻も firstTurnDraw 枚）', () => {
   const { game, log } = setup({ deck: ['infantry', 'knight', 'heal'] });
   assert.deepEqual(types(log), ['turnStarted', 'cardDrawn']);
-  assert.equal(log[1].cardIds.length, 1);
+  assert.equal(log.find((e) => e.event === 'cardDrawn').cardIds.length, 1);
   assert.equal(game.getState('p1').phase, 'main');
   assert.deepEqual(game.start(), { ok: false, reason: 'ゲームはもう始まっています' });
 });
