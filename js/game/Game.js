@@ -46,6 +46,7 @@ const RULE_KEYS = {
   firstTurnDraw: 0,
   maxHand: 0,
   laneLength: 1,
+  secondPlayerCastleBonus: 0,
 };
 
 const ok = () => ({ ok: true });
@@ -73,11 +74,17 @@ export class Game {
     this.listeners = new Map(EVENT_TYPES.map((type) => [type, new Set()]));
 
     this.players = {};
-    for (const id of PLAYER_IDS) this.players[id] = new Player(id, this.rules.castleMaxHp);
+    // 後攻（p2）は城HPが secondPlayerCastleBonus だけ多い状態で始まる（上限も同じだけ高い）。先攻有利をやわらげるため
+    for (const id of PLAYER_IDS) {
+      const bonus = id === PLAYER_IDS[1] ? this.rules.secondPlayerCastleBonus : 0;
+      this.players[id] = new Player(id, this.rules.castleMaxHp + bonus);
+    }
 
     /** 山札。先頭（index 0）から引く */
     this.deck = this.shuffle(this.buildDeck());
     this.discardPile = [];
+    /** 使い切りのカード（cards.json で exhaust: true）は、使ったらここへ行き、山札には戻らない */
+    this.exhaustedPile = [];
 
     this.turn = 0;
     this.currentPlayer = PLAYER_IDS[0];
@@ -357,7 +364,9 @@ export class Game {
     const player = this.players[this.currentPlayer];
     const card = player.takeFromHand(cardId);
     player.playedThisTurn = true;
-    this.discardPile.push(card); // 使ったカードは（兵士も）すぐ捨て札へ
+    // 使ったカードは（兵士も）すぐ捨て札へ。使い切りのカードは、二度と山札に戻らない置き場へ
+    if (card.isExhaust) this.exhaustedPile.push(card);
+    else this.discardPile.push(card);
     this.emit('cardPlayed', { playerId: player.id, cardId: card.cardId, type: card.type });
 
     if (card.isSoldier) {
@@ -502,6 +511,7 @@ export class Game {
       winner: this.winner,
       deckCount: this.deck.length,
       discardCount: this.discardPile.length,
+      exhaustedCount: this.exhaustedPile.length,
       players,
     };
   }
@@ -510,11 +520,11 @@ export class Game {
   // どれもイベントは出さない。呼んだあとは getState() を読み直して画面を描き直す。
   // start() の前に呼べば、開始時の状態を作れる。
 
-  /** 城HPを変える（1〜上限） */
+  /** 城HPを変える（1〜その城の上限） */
   debugSetCastleHp(playerId, hp) {
     if (!this.players[playerId]) return fail('プレイヤーIDは "p1" か "p2" です');
     if (this.phase === 'gameOver') return fail('ゲームは終わっています');
-    const max = this.rules.castleMaxHp;
+    const max = this.players[playerId].castle.maxHp;
     if (!Number.isInteger(hp) || hp < 1 || hp > max) return fail(`HPは1〜${max}の整数にしてください`);
     this.players[playerId].castle.hp = hp;
     return ok();

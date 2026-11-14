@@ -1,8 +1,9 @@
 {
-  "castleMaxHp": 100,
-  "initialHand": 6,
-  "drawPerTurn": 2,
-  "firstTurnDraw": 0,
+  "castleMaxHp": 25,
+  "secondPlayerCastleBonus": 2,
+  "initialHand": 5,
+  "drawPerTurn": 1,
+  "firstTurnDraw": 1,
   "maxHand": 8,
   "laneLength": 5
 }
