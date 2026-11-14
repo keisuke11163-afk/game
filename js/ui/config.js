@@ -30,6 +30,9 @@ export const UI_CONFIG = {
     monsterDefeat: 600,    // 魔物を倒した
     coins: 260,            // コインが増える・減る
     upgrade: 420,          // 強化を買った
+    discard: 150,          // 手札を捨てたあと
+    afterSoldierHit: 160,  // 兵士にダメージが入ったあとの間
+    afterMonsterHit: 120,  // 魔物にダメージが入ったあとの間
   },
 
   // 城にダメージが入ったときの手応え。値 = base + perDamage × ダメージ（max で頭打ち）
@@ -49,6 +52,7 @@ export const UI_CONFIG = {
     shake: 3,
     numberSize: 26,
     numberDuration: 600,
+    shakeDuration: 200,
   },
 
   // 魔物にダメージが入ったとき
@@ -57,6 +61,7 @@ export const UI_CONFIG = {
     shake: 4,
     numberSize: 30,
     numberDuration: 650,
+    shakeDuration: 200,
   },
 
   // 回復の数字

@@ -12,6 +12,8 @@ import { HandView } from './ui/HandView.js';
 import { Animations } from './ui/Animations.js';
 import { DebugPanel } from './ui/DebugPanel.js';
 import { UpgradePanel } from './ui/UpgradePanel.js';
+import { Targeting } from './ui/Targeting.js';
+import { checkSync } from './ui/syncCheck.js';
 import { UI_CONFIG } from './ui/config.js';
 import { playerName, reasonText, soldierInfo, monsterInfo, GAME_OVER_TEXT } from './ui/text.js';
 
@@ -34,9 +36,7 @@ const el = {
   confetti: document.querySelector('#result .confetti'),
   rematch: $('rematch'),
   error: $('error'),
-  targetBar: $('target-bar'),
-  targetMsg: document.querySelector('#target-bar .target-msg'),
-  targetCancel: document.querySelector('#target-bar .target-cancel'),
+  upgradeOpen: $('upgrade-open'),
 };
 
 let cards;
@@ -47,6 +47,7 @@ let renderer;
 let handView;
 let anim;
 let upgradePanel = null;
+let targeting = null;      // 対象を選ぶ（js/ui/Targeting.js）
 
 let game = null;
 let seed = 0;
@@ -55,7 +56,7 @@ let model = null;          // 表示用の状態（演出の進みに合わせ�
 let queue = [];            // まだ演出していないイベント
 let busy = true;           // 演出中・交代画面中は true
 let knownCards = new Map(); // cardId → { cardId, type }（viewer の手札の中身）
-let targeting = null;      // 対象を選んでいるところ：{ cardId, targets, armed }
+let lastCastleHit = null;  // 最後に城を削ったもの（"monster" なら魔物の攻撃）。決着の文に使う
 let upgradeCounts = {};    // playerId → { upgradeId: 買った回数 }（getState にないので、イベントから数える）
 const listeners = [];
 
@@ -68,13 +69,18 @@ async function loadJson(path) {
   return res.json();
 }
 
-/** なくてもよい JSON（読めなければ null） */
+/** なくてもよい JSON。ファイルがない（404）ときだけ null。壊れているときは cards.json と同じく止める */
 async function loadOptionalJson(path) {
-  try {
-    return await loadJson(path);
-  } catch (err) {
-    console.warn(`${path} を読めなかったので、なしで始めます`, err);
+  const res = await fetch(path, { cache: 'no-store' });
+  if (res.status === 404) {
+    console.warn(`${path} がないので、なしで始めます`);
     return null;
+  }
+  if (!res.ok) throw new Error(`${path} を読み込めませんでした（${res.status}）`);
+  try {
+    return await res.json();
+  } catch (err) {
+    throw new Error(`${path} の書き方がまちがっています（${err.message}）`);
   }
 }
 
@@ -95,7 +101,12 @@ async function boot() {
   // デバッグ：URL の rules={"monsterFirstRound":1,...} で、ルールの一部だけ変えて試せる（data/ は書き換えない）
   if (DEBUG && params.has('rules')) {
     try {
-      Object.assign(rules, JSON.parse(params.get('rules')));
+      const override = JSON.parse(params.get('rules'));
+      // rules.json にあるキーだけ取りこむ（__proto__ などで rules のしくみを変えないように）
+      for (const k of Object.keys(override ?? {})) {
+        if (Object.hasOwn(rules, k)) rules[k] = override[k];
+        else console.warn(`URL の rules：rules.json にないキー "${k}" は使いません`);
+      }
     } catch (err) {
       console.error('URL の rules を読めませんでした', err);
     }
@@ -103,27 +114,28 @@ async function boot() {
 
   renderer = new Renderer({
     cards, rules, monsters,
+    showCoins: Boolean(monsters || upgrades), // コインは魔物か強化があるときだけ出す（自分も相手も同じ）
     onSoldierTap: (s) => toast(soldierInfo(s, { cards, rules, viewerId }), 'info'),
     onMonsterTap: (m) => toast(monsterInfo(m, { monsters }), 'info'),
-    onTargetTap: chooseTarget,
+    onTargetTap: (target) => { if (!busy) targeting.tap(target); },
   });
   handView = new HandView({
     cards, rules, textOpts: { monsters: Boolean(monsters) },
     onPlay: playCard, onDiscard: discard, onNotice: toast,
   });
   anim = new Animations({ renderer, handView, cards, rules, monsters, upgrades });
+  targeting = new Targeting({ renderer, handView, onChoose: (cardId, target) => doPlay(cardId, target) });
   if (upgrades && Object.keys(upgrades).length) {
-    upgradePanel = new UpgradePanel({ upgrades, onBuy: buyUpgrade, onOpen: refreshUpgrades });
+    upgradePanel = new UpgradePanel({ upgrades, onBuy: buyUpgrade, onOpen: refreshUpgrades, onDenied: (r) => toast(r, 'info') });
+  } else {
+    // 強化のデータがないときも、コインのボタンを押したら理由を出す
+    el.upgradeOpen.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toast('強化のデータ（data/upgrades.json）がないので、強化は買えません', 'info');
+    });
   }
 
   el.endTurn.addEventListener('click', endTurn);
-  el.targetCancel.addEventListener('click', (e) => { e.stopPropagation(); cancelTargeting(); });
-  // 対象を選んでいるときに、盤面と手札以外をタップしたらやめる（盤面のタップは Renderer が知らせる）
-  el.app.addEventListener('click', (e) => {
-    if (!targeting?.armed) return;
-    if (e.target.closest('#board, #target-bar, #debug-panel, #debug-toggle')) return;
-    cancelTargeting();
-  });
   el.rematch.addEventListener('click', (e) => { e.stopPropagation(); newGame(); });
   // 演出中に画面をタップしたら飛ばす（交代画面・勝敗画面は除く）
   el.app.addEventListener('pointerdown', (e) => {
@@ -137,12 +149,15 @@ async function boot() {
       getSeed: () => seed,
       getViewerId: () => viewerId,
       onRestart: (s) => newGame(s),
-      onChanged: () => { if (!busy) settle(); },
+      onChanged: () => {
+        cancelTargeting();
+        if (!busy) settleSafely();
+      },
       onConfigChanged: () => { anim.applyCssTiming(); handView.updateDetail(); },
       notify: toast,
     });
     // コンソールから Game を触れるようにする（デバッグのときだけ）
-    window.castlefield = { game: () => game, seed: () => seed };
+    window.castlefield = { game: () => game, seed: () => seed, renderer: () => renderer };
   }
 
   newGame();
@@ -169,6 +184,7 @@ function newGame(seedOverride) {
   cancelTargeting();
   upgradePanel?.close();
   upgradeCounts = {};
+  lastCastleHit = null;
   try {
     const opts = { cards: structuredClone(cards), rules: structuredClone(rules), rng: mulberry32(seed) };
     if (monsters) opts.monsters = structuredClone(monsters);
@@ -182,6 +198,8 @@ function newGame(seedOverride) {
   // Game が出すイベントは全部受け取る（演出がないものは Animations が何もしない）
   for (const type of EVENT_TYPES) {
     const h = (payload) => {
+      if (type === 'castleDamaged') lastCastleHit = 'castle';
+      if (type === 'monsterAttackedCastle') lastCastleHit = 'monster';
       if (type === 'upgradeBought') {
         const counts = (upgradeCounts[payload.playerId] ??= {});
         counts[payload.upgradeId] = (counts[payload.upgradeId] ?? 0) + 1;
@@ -262,7 +280,7 @@ function setBusy(value) {
   handView.setLocked(value);
   if (value) {
     cancelTargeting();
-    upgradePanel?.setEnabled(false);
+    upgradePanel?.setEnabled(false, { reason: upgradeOffReason(game?.getState(viewerId)) });
     el.endTurn.disabled = true;
     el.endTurn.classList.remove('ready');
     setMessage('');
@@ -289,18 +307,39 @@ async function drainEvents() {
 }
 
 async function drainAndSettle() {
-  await drainEvents();
-  await settle();
+  try {
+    await drainEvents();
+    await settle();
+  } catch (err) {
+    recover(err);
+  }
+}
+
+/** デバッグパネルで状態を変えたあと（演出なしで変わるので、ずれの確認はしない） */
+function settleSafely() {
+  settle({ check: false }).catch(recover);
+}
+
+/** 演出や画面合わせで例外が出たとき：知らせて、操作できる状態に戻す（何を押しても反応しない、を作らない） */
+function recover(err) {
+  console.error('画面の更新に失敗しました', err);
+  anim.endSkip();
+  toast(`画面の更新でエラーが起きました：${err?.message ?? err}`);
+  setBusy(false);
+  el.endTurn.disabled = false;
 }
 
 /** 演出が終わったら、本当の状態（getState）で画面を合わせ、次の操作を待つ */
-async function settle() {
+async function settle({ check = true } = {}) {
   const st = readState();
   if (st.phase !== 'gameOver' && st.phase !== 'ready' && st.currentPlayer !== viewerId) {
     // 手番が変わったのに turnStarted が来なかった場合の保険
     await handover(st.currentPlayer, st.turn);
-    return settle();
+    return settle({ check });
   }
+  // デバッグ：演出で進めた値と本当の状態がずれていないか（ずれていたら console.warn('[sync]', ...)）
+  if (DEBUG && check && st.phase !== 'gameOver') checkSync(model, st);
+  if (model.gameOverReason === 'castleDestroyed' && lastCastleHit === 'monster') model.gameOverReason = 'monsterDestroyed';
   model = modelFromState(st);
   renderer.renderAll(model);
   const me = st.players[viewerId];
@@ -353,7 +392,7 @@ function playability(st) {
 
 function playCard(cardId) {
   if (busy || !game) return;
-  cancelTargeting();
+  targeting.cancel();
   upgradePanel?.close();
   const check = game.canPlayCard(cardId);
   if (check?.ok && check.needsTarget) {
@@ -365,59 +404,37 @@ function playCard(cardId) {
 
 /** カードを出す（target を省略すると、対象が1つのときだけ出せる） */
 function doPlay(cardId, target) {
+  if (busy || !game) return;
   const res = target ? game.playCard(cardId, target) : game.playCard(cardId);
   if (!res?.ok) {
     if (res?.needsTarget) {
       startTargeting(cardId);
       return;
     }
-    cancelTargeting();
+    targeting.cancel();
     handView.deny(cardId);
     toast(reasonText(res?.reason));
     return;
   }
-  cancelTargeting();
+  targeting.cancel();
   drainAndSettle();
 }
 
-// ---------- 対象を選ぶ ----------
-
-/** 対象が2つ以上あるカード：盤面の対象を光らせて、タップで選んでもらう */
+/** 対象が2つ以上あるカード：盤面の対象を光らせて選んでもらう */
 function startTargeting(cardId) {
   const targets = game.getTargets(cardId);
   if (targets.length === 0) {
-    doPlay(cardId); // 出せない理由を Game から出してもらう
+    targeting.cancel();
+    handView.deny(cardId);
+    toast(reasonText(game.canPlayCard(cardId)?.reason)); // 出せない理由を Game から出してもらう
     return;
   }
-  targeting = { cardId, targets, armed: false };
-  // カードを出したタップそのもので「やめる」にならないよう、次のタップから受け付ける
-  const t = targeting;
-  setTimeout(() => { t.armed = true; }, 0);
-  renderer.setTargets(targets);
-  handView.cardEl(cardId)?.classList.add('choosing');
   const type = knownCards.get(cardId)?.type;
-  const name = cards[type]?.name ?? 'カード';
-  const kinds = new Set(targets.map((x) => (x.soldierId ? '兵士' : x.monsterId ? '魔物' : '城')));
-  el.targetMsg.textContent = `「${name}」をどこに使う？ 光っている${[...kinds].join('か')}をタップ`;
-  el.targetBar.hidden = false;
+  targeting.start(cardId, targets, cards[type]?.name ?? 'カード');
 }
 
 function cancelTargeting() {
-  if (!targeting) return;
-  handView.cardEl(targeting.cardId)?.classList.remove('choosing');
-  targeting = null;
-  renderer?.setTargets(null);
-  el.targetBar.hidden = true;
-}
-
-/** 盤面がタップされた（対象を選んでいるとき）。光っていない所なら選ぶのをやめる */
-function chooseTarget(target) {
-  if (!targeting || !targeting.armed || busy) return;
-  if (!target) {
-    cancelTargeting();
-    return;
-  }
-  doPlay(targeting.cardId, target);
+  targeting?.cancel();
 }
 
 // ---------- 強化 ----------
@@ -428,11 +445,20 @@ function refreshUpgrades() {
   const st = game.getState(viewerId);
   const me = st.players[viewerId];
   const myTurn = !busy && st.phase === 'main' && st.currentPlayer === viewerId;
+  const why = upgradeOffReason(st);
   const status = {};
-  for (const id of Object.keys(upgrades)) status[id] = myTurn ? game.canBuyUpgrade(id) : { ok: false, reason: 'いまは買えません' };
+  for (const id of Object.keys(upgrades)) status[id] = myTurn ? game.canBuyUpgrade(id) : { ok: false, reason: why };
   const anyOk = Object.values(status).some((x) => x.ok);
-  upgradePanel.setEnabled(myTurn, { highlight: anyOk });
+  upgradePanel.setEnabled(myTurn, { highlight: anyOk, reason: why });
   if (me) upgradePanel.refresh(me.coins ?? 0, status, upgradeCounts[viewerId] ?? {});
+}
+
+/** 強化を買えない場面の理由 */
+function upgradeOffReason(st) {
+  if (st?.phase === 'gameOver') return 'ゲームは終わっています';
+  if (st?.phase === 'discard') return '先に手札を捨ててください';
+  if (busy) return '演出が終わってから買えます';
+  return '強化は自分の番のメインで買えます';
 }
 
 function buyUpgrade(upgradeId) {
@@ -467,15 +493,19 @@ async function discard(cardIds) {
     toast(reasonText(res?.reason));
     return;
   }
-  await drainEvents();
-  // 捨て終わっても次の人の番にならなかったら、こちらでターンを終える
-  const st = readState();
-  if (st.phase === 'main' && st.currentPlayer === viewerId && model.turn === turnBefore) {
-    const again = game.endTurn();
-    if (!again?.ok) toast(reasonText(again?.reason));
+  try {
     await drainEvents();
+    // 捨て終わっても次の人の番にならなかったら、こちらでターンを終える
+    const st = readState();
+    if (st.phase === 'main' && st.currentPlayer === viewerId && model.turn === turnBefore) {
+      const again = game.endTurn();
+      if (!again?.ok) toast(reasonText(again?.reason));
+      await drainEvents();
+    }
+    await settle();
+  } catch (err) {
+    recover(err);
   }
-  await settle();
 }
 
 // ---------- 交代・勝敗 ----------

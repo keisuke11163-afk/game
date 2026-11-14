@@ -12,13 +12,14 @@ const $ = (id) => document.getElementById(id);
 
 export class Renderer {
   /**
-   * @param {{ cards: object, rules: object, monsters?: object,
+   * @param {{ cards: object, rules: object, monsters?: object, showCoins?: boolean,
    *           onSoldierTap?: (info: object) => void,
    *           onMonsterTap?: (info: object) => void,
    *           onTargetTap?: (target: object|null) => void }} opts
    *   onTargetTap：対象を選んでいるときに盤面がタップされたら呼ぶ（光っていない所なら null）
+   *   showCoins：コインを出すか（自分と相手で同じ条件。main.js が決める）
    */
-  constructor({ cards, rules, monsters = null, onSoldierTap, onMonsterTap, onTargetTap }) {
+  constructor({ cards, rules, monsters = null, showCoins = false, onSoldierTap, onMonsterTap, onTargetTap }) {
     this.cards = cards;
     this.rules = rules;
     this.monsterDefs = monsters;
@@ -52,7 +53,9 @@ export class Renderer {
       lane: { me: $('lane-me'), opp: $('lane-opp') },
       monsterLayer: $('monster-layer'),
     };
-    this.el.oppCoins.hidden = !this.monsterDefs;
+    // コインは自分（「強化」ボタンの中）と相手（上のバー）を同じ条件で出す
+    this.el.oppCoins.hidden = !showCoins;
+    $('upgrade-open').hidden = !showCoins;
 
     this.buildLanes();
 

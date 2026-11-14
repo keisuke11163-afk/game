@@ -52,6 +52,13 @@ export const ICON = {
   round: '🔁',
 };
 
+/** 兵士が光るときの色（武器に属性がないとき・盾・とぎ石） */
+export const GLOW = {
+  weapon: '#fbbf24',
+  shield: '#93c5fd',
+  buff: '#fbbf24',
+};
+
 /** 魔法の効果ごとの、魔法が当たったときの色（毒の霧・氷の息など） */
 export const SPELL_TINT = {
   poisonEnemySoldiers: 'rgba(132, 204, 22, 0.45)',

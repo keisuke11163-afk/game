@@ -8,13 +8,17 @@ const $ = (id) => document.getElementById(id);
 
 export class UpgradePanel {
   /**
-   * @param {{ upgrades: object, onBuy: (upgradeId: string) => void, onOpen: () => void }} opts
+   * @param {{ upgrades: object, onBuy: (upgradeId: string) => void, onOpen: () => void,
+   *           onDenied: (reason: string) => void }} opts
    *   onOpen：パネルを開くとき（main.js が最新の状態で refresh() を呼ぶ）
+   *   onDenied：いま開けないときにボタンが押された（理由を出す）
    */
-  constructor({ upgrades, onBuy, onOpen }) {
+  constructor({ upgrades, onBuy, onOpen, onDenied }) {
     this.upgrades = upgrades;
     this.onBuy = onBuy;
     this.onOpen = onOpen;
+    this.onDenied = onDenied;
+    this.offReason = ''; // いま開けない理由（空なら開ける）
     this.el = {
       open: $('upgrade-open'),
       panel: $('upgrade-panel'),
@@ -22,10 +26,11 @@ export class UpgradePanel {
       coins: document.querySelector('#upgrade-panel .upgrade-coins'),
       close: document.querySelector('#upgrade-panel .upgrade-close'),
     };
-    this.el.open.hidden = false;
+    // ボタンは disabled にしない。開けないときは、押すと理由を出す（押して何も起きない、を作らない）
     this.el.open.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (this.el.panel.hidden) this.open();
+      if (this.offReason) this.onDenied(this.offReason);
+      else if (this.el.panel.hidden) this.open();
       else this.close();
     });
     this.el.close.addEventListener('click', () => this.close());
@@ -53,9 +58,14 @@ export class UpgradePanel {
     this.el.panel.hidden = true;
   }
 
-  /** 開けるかどうか（自分のメインの場面だけ） */
-  setEnabled(enabled, { highlight = false } = {}) {
-    this.el.open.disabled = !enabled;
+  /**
+   * 開けるかどうか（自分のメインの場面だけ）
+   * @param {boolean} enabled
+   * @param {{ highlight?: boolean, reason?: string }} opts reason：開けないときに出す理由
+   */
+  setEnabled(enabled, { highlight = false, reason = 'いまは強化を買えません' } = {}) {
+    this.offReason = enabled ? '' : reason;
+    this.el.open.classList.toggle('off', !enabled);
     this.el.open.classList.toggle('ready', enabled && highlight);
     if (!enabled) this.close();
   }

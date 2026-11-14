@@ -3,7 +3,7 @@
 // 画面をタップすると skip() が呼ばれ、残りの演出は一瞬で終わる。
 
 import { UI_CONFIG, scaled } from './config.js';
-import { ELEMENT_LOOK, STATUS_ICON, ICON, SPELL_TINT, monsterIcon, upgradeIcon } from './look.js';
+import { ELEMENT_LOOK, STATUS_ICON, ICON, SPELL_TINT, GLOW, monsterIcon, upgradeIcon } from './look.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -223,6 +223,13 @@ export class Animations {
     }
   }
 
+  /** first と、そのあとに続けて来た同じ種類のイベントを queue から取り出し、ペイロードの配列で返す */
+  takeRun(first, queue) {
+    const list = [first.payload];
+    while (queue[0]?.type === first.type) list.push(queue.shift().payload);
+    return list;
+  }
+
   /** 表示用の状態の兵士を探す */
   modelSoldier(model, playerId, soldierId) {
     return model.players[playerId]?.soldiers.find((x) => x.soldierId === soldierId) ?? null;
@@ -269,11 +276,7 @@ export class Animations {
 
   async roundStarted({ round }, model) {
     model.round = round;
-    // 周回の始めに、魔物の「城を攻めるまで」が1減る（0になった魔物はこのあと城を攻める）
-    for (const m of model.monsters ?? []) {
-      if (m.attackIn != null) m.attackIn -= 1;
-      this.renderer.updateMonster(m.monsterId, { attackIn: m.attackIn });
-    }
+    // 魔物の「城を攻めるまで」（attackIn）はイベントに入っていないので、演出のあとの getState で合わせる
     this.renderer.setTurnInfo(model.turn, round);
     if (round <= 1) return;
     this.banner(`${ICON.round} ${round}周目`, UI_CONFIG.timing.round, 'small');
@@ -362,7 +365,7 @@ export class Animations {
       this.renderer.setOppHandCount(pl.handCount);
     }
     this.renderer.setPiles(model.deckCount, model.discardCount, { bumpDiscard: true });
-    await this.delay(150);
+    await this.delay(UI_CONFIG.timing.discard);
   }
 
   async soldierDeployed({ playerId, soldierId, type, position, hp, attack, roadId, targetId }, model) {
@@ -396,8 +399,7 @@ export class Animations {
 
   /** 兵士へのダメージ：続けて来たものはまとめて同時に見せる。盾が受けたぶんと毒は見た目を変える */
   async soldiersDamaged(first, queue, model) {
-    const hits = [first.payload];
-    while (queue[0]?.type === 'soldierDamaged') hits.push(queue.shift().payload);
+    const hits = this.takeRun(first, queue);
     const cfg = UI_CONFIG.soldierHit;
     const small = UI_CONFIG.smallNumber;
     const lanes = new Set();
@@ -409,8 +411,12 @@ export class Animations {
       if (s) {
         s.hp = h.hp;
         s.shield = Math.max(0, (s.shield ?? 0) - blocked);
+        // 毒のダメージ1回で、毒の残りが1減る（0になれば statusCleared が来る）。量はここで分かる
+        if (h.cause === 'poison' && s.statuses?.poison) {
+          s.statuses = { ...s.statuses, poison: { amount: h.amount, turns: s.statuses.poison.turns - 1 } };
+        }
       }
-      this.renderer.updateSoldier(h.soldierId, { hp: h.hp, shield: s?.shield ?? 0 });
+      this.renderer.updateSoldier(h.soldierId, { hp: h.hp, shield: s?.shield ?? 0, ...(s ? { statuses: s.statuses } : {}) });
       const el = this.renderer.soldierEl(h.soldierId);
       if (!el) continue;
       const poison = h.cause === 'poison';
@@ -428,14 +434,13 @@ export class Animations {
     }
     if (anyHit) await this.hitstop(cfg.hitstop);
     for (const h of hits) this.renderer.soldierEl(h.soldierId)?.classList.remove('hit', 'hit-poison', 'blocked');
-    for (const lane of lanes) this.shake(lane, cfg.shake, 200);
-    await this.delay(160);
+    for (const lane of lanes) this.shake(lane, cfg.shake, cfg.shakeDuration);
+    await this.delay(UI_CONFIG.timing.afterSoldierHit);
   }
 
   /** 兵士が消える：続けて来たものはまとめて同時に消す */
   async soldiersDestroyed(first, queue, model) {
-    const list = [first.payload];
-    while (queue[0]?.type === 'soldierDestroyed') list.push(queue.shift().payload);
+    const list = this.takeRun(first, queue);
     for (const d of list) {
       const pl = model.players[d.playerId];
       pl.soldiers = pl.soldiers.filter((x) => x.soldierId !== d.soldierId);
@@ -599,7 +604,7 @@ export class Animations {
     this.renderer.updateSoldier(soldierId, { weapon: type, attack, element: element ?? null });
     const look = ELEMENT_LOOK[element];
     await this.soldierGlow(soldierId, {
-      color: look?.color ?? '#fbbf24',
+      color: look?.color ?? GLOW.weapon,
       text: `${look?.icon ?? '⚔'}${this.cards[type]?.name ?? ''}`,
       ms: UI_CONFIG.timing.equip,
     });
@@ -609,13 +614,12 @@ export class Animations {
     const s = this.modelSoldier(model, playerId, soldierId);
     if (s) s.shield = shield;
     this.renderer.updateSoldier(soldierId, { shield });
-    await this.soldierGlow(soldierId, { color: '#93c5fd', text: `${ICON.shield}+${amount}`, ms: UI_CONFIG.timing.equip });
+    await this.soldierGlow(soldierId, { color: GLOW.shield, text: `${ICON.shield}+${amount}`, ms: UI_CONFIG.timing.equip });
   }
 
   /** とぎ石：続けて来たものはまとめて光らせる */
   async soldiersBuffed(first, queue, model) {
-    const list = [first.payload];
-    while (queue[0]?.type === 'soldierBuffed') list.push(queue.shift().payload);
+    const list = this.takeRun(first, queue);
     const waits = [];
     for (const b of list) {
       const s = this.modelSoldier(model, b.playerId, b.soldierId);
@@ -624,7 +628,7 @@ export class Animations {
       this.renderer.updateSoldier(b.soldierId, { attack: b.attack });
       const diff = b.attack - before;
       waits.push(this.soldierGlow(b.soldierId, {
-        color: '#fbbf24', text: `⚔${diff > 0 ? `+${diff}` : b.attack}`, ms: UI_CONFIG.timing.equip,
+        color: GLOW.buff, text: `⚔${diff > 0 ? `+${diff}` : b.attack}`, ms: UI_CONFIG.timing.equip,
       }));
     }
     await Promise.all(waits);
@@ -655,14 +659,13 @@ export class Animations {
 
   /** 毒・凍結がかかる：続けて来たものはまとめて見せる */
   async statusesApplied(first, queue, model) {
-    const list = [first.payload];
-    while (queue[0]?.type === 'statusApplied') list.push(queue.shift().payload);
+    const list = this.takeRun(first, queue);
     for (const a of list) {
       const s = this.modelSoldier(model, a.playerId, a.soldierId);
       const statuses = { ...(s?.statuses ?? this.renderer.soldier(a.soldierId)?.statuses ?? { poison: null, frozen: 0 }) };
       if (a.status === 'poison') {
-        const def = Object.values(this.cards).find((c) => c.effect === 'poisonEnemySoldiers');
-        statuses.poison = { amount: Math.max(statuses.poison?.amount ?? 0, def?.amount ?? 1), turns: a.turns };
+        // statusApplied に毒の量はない。量は推測せず（null）、毒のダメージを受けたときか getState で分かる
+        statuses.poison = { amount: statuses.poison?.amount ?? null, turns: a.turns };
       } else if (a.status === 'frozen') {
         statuses.frozen = a.turns;
       }
@@ -698,7 +701,7 @@ export class Animations {
     const def = this.monsterDefs?.[p.type] ?? {};
     const m = {
       monsterId: p.monsterId, type: p.type, roadId: p.roadId, square: p.square,
-      hp: p.hp, maxHp: def.hp ?? p.hp, attack: p.attack, element: p.element ?? null,
+      hp: p.hp, maxHp: p.hp, // 出たときは満タン attack: p.attack, element: p.element ?? null,
       attackIn: def.attackEvery ?? null, reward: def.reward ?? null, castleAttack: def.castleAttack ?? null,
     };
     model.monsters = [...(model.monsters ?? []).filter((x) => x.monsterId !== m.monsterId), m];
@@ -711,11 +714,6 @@ export class Animations {
   }
 
   async monsterAttackedCastle({ monsterId, playerId, amount, hp }, model) {
-    const m = this.modelMonster(model, monsterId);
-    if (m) {
-      m.attackIn = this.monsterDefs?.[m.type]?.attackEvery ?? m.attackIn;
-      this.renderer.updateMonster(monsterId, { attackIn: m.attackIn });
-    }
     model.players[playerId].castleHp = hp;
     const mEl = this.renderer.monsterEl(monsterId);
     const castle = this.renderer.castleEl(playerId);
@@ -751,8 +749,8 @@ export class Animations {
     this.number(el, `-${amount}`, { size: cfg.numberSize, duration: cfg.numberDuration });
     await this.hitstop(cfg.hitstop);
     el.classList.remove('hit');
-    this.shake(el.querySelector('.monster-token'), cfg.shake, 200);
-    await this.delay(120);
+    this.shake(el.querySelector('.monster-token'), cfg.shake, cfg.shakeDuration);
+    await this.delay(UI_CONFIG.timing.afterMonsterHit);
   }
 
   async monsterDefeated({ monsterId, playerId, reward }, model) {

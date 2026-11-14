@@ -94,7 +94,10 @@ export function soldierInfo(s, { cards, rules, viewerId }) {
   }
   if (s.shield > 0) parts.push(`${ICON.shield}盾${s.shield}`);
   const poison = s.statuses?.poison;
-  if (poison) parts.push(`${STATUS_ICON.poison}毒${poison.amount}×あと${poison.turns}回`);
+  if (poison) {
+    parts.push(poison.amount != null ? `${STATUS_ICON.poison}毒${poison.amount}×あと${poison.turns}回`
+      : `${STATUS_ICON.poison}毒（あと${poison.turns}回）`);
+  }
   if (s.statuses?.frozen > 0) parts.push(`${STATUS_ICON.frozen}凍結（あと${s.statuses.frozen}回休み）`);
   return parts.join('・');
 }
@@ -115,6 +118,7 @@ export function monsterInfo(m, { monsters }) {
 /** 勝ち方の説明（gameOver の reason） */
 export const GAME_OVER_TEXT = {
   castleDestroyed: '城を落とした！',
+  monsterDestroyed: '魔物が城を落とした！', // 画面だけの値（最後の城ダメージが魔物の攻撃だったとき）
   lastStanding: '最後まで城が残った！',
   roundLimit: '周回の上限：城HPの残りが多い方の勝ち',
 };

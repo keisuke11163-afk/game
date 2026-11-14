@@ -258,7 +258,10 @@ button { font: inherit; color: inherit; }
   transform: translateX(var(--offset, 0px));
   transition: top var(--t-move) cubic-bezier(.45, 0, .3, 1), transform 160ms;
   z-index: 3;
+  /* 箱は列の幅いっぱいなので、タップは駒（.soldier-token）だけで受ける（となりの駒をふさがないように） */
+  pointer-events: none;
 }
+.soldier .soldier-token { pointer-events: auto; }
 .soldier.no-anim { transition: none; }
 .soldier-token {
   position: relative;
@@ -349,19 +352,21 @@ button { font: inherit; color: inherit; }
 }
 .monster {
   position: absolute;
+  pointer-events: none;
   left: 50%;
   top: calc(100% / var(--cells) * var(--row, 1));
   height: calc(100% / var(--cells));
-  width: 96px;
-  margin-left: -48px;
+  width: 64px;
+  margin-left: -32px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  pointer-events: auto;
   cursor: pointer;
 }
+/* 魔物のタップは駒とHPバーだけで受ける（まわりの兵士をふさがないように） */
+.monster-token, .monster-hp { pointer-events: auto; }
 .monster-token {
   position: relative;
   width: 54px;
@@ -410,6 +415,9 @@ button { font: inherit; color: inherit; }
 #app.targeting #field .soldier:not(.targetable), #app.targeting .monster:not(.targetable),
 #app.targeting .castle:not(.targetable) { opacity: 0.45; }
 .targetable { cursor: pointer; }
+/* 対象を選んでいる間は、光っている対象をいちばん前に出す（魔物と兵士が重なってもタップできるように） */
+#app.targeting #field .soldier.targetable { z-index: 6; }
+#app.targeting #monster-layer:has(.targetable) { z-index: 7; }
 .soldier.targetable .soldier-token, .monster.targetable .monster-token, .castle.targetable .castle-body {
   outline: 3px solid var(--target);
   outline-offset: 3px;
@@ -507,7 +515,7 @@ button { font: inherit; color: inherit; }
 #upgrade-open[hidden] { display: none; }
 #upgrade-open b { font-size: 15px; }
 .upgrade-open-label { font-size: 11px; color: var(--text); margin-left: 2px; }
-#upgrade-open:disabled { opacity: 0.35; cursor: default; }
+#upgrade-open.off { opacity: 0.45; }
 #upgrade-open.ready { animation: ready-coin 1.4s ease-in-out infinite; }
 #upgrade-open.bump { animation: bump 300ms ease-out; }
 @keyframes ready-coin { 50% { box-shadow: 0 0 0 5px rgba(250, 204, 21, 0.3); } }
