@@ -1,0 +1,5 @@
+{
+  "balanced": {"name": "バランス", "cards": {"infantry": 6, "knight": 4, "fireball": 4, "thunder": 3, "heal": 2, "flameSword": 1, "waterSpear": 1, "woodAxe": 1, "shield": 3, "wall": 1, "poisonMist": 2, "frostBreath": 1}},
+  "assault": {"name": "突撃", "cards": {"infantry": 8, "knight": 3, "fireball": 4, "thunder": 2, "heal": 2, "flameSword": 2, "waterSpear": 2, "woodAxe": 2, "shield": 3, "frostBreath": 1}},
+  "siege": {"name": "籠城", "cards": {"infantry": 7, "knight": 4, "fireball": 4, "thunder": 3, "heal": 2, "shield": 5, "wall": 2, "poisonMist": 2, "frostBreath": 2}}
+}

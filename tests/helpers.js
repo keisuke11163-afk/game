@@ -40,7 +40,7 @@ export function loadOptionalData() {
       return null;
     }
   };
-  return { monsters: read('monsters.json'), upgrades: read('upgrades.json') };
+  return { monsters: read('monsters.json'), upgrades: read('upgrades.json'), castles: read('castles.json'), decks: read('decks.json') };
 }
 
 /** シード付きの乱数（mulberry32）。同じシードなら同じ並びになる */

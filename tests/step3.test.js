@@ -132,7 +132,8 @@ test('手番の人（p1）の城が魔物に落とされたら、p2 の勝ち', 
   const atk = log.find((e) => e.event === 'monsterAttackedCastle');
   assert.equal(atk.playerId, 'p1');
   assert.equal(game.getState(null).winner, 'p2');
-  assert.deepEqual(log.at(-1), { event: 'gameOver', winner: 'p2' });
+  assert.equal(log.at(-1).event, 'gameOver');
+  assert.equal(log.at(-1).winner, 'p2');
 });
 
 test('放置した魔物の攻撃：ふつうは castleAttack ぶん減る', () => {

@@ -16,6 +16,8 @@ import { STRATEGIES } from './strategies.js';
  */
 export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, gameOptions = {} }) {
   const game = new Game({ cards, rules, rng: seededRng(seed), ...gameOptions });
+  const playerCount = game.getState(null).playerOrder.length;
+  if (strategies.length !== playerCount) throw new Error(`戦い方は人数ぶん（${playerCount}個）必要です`);
   const aiRng = seededRng(seed ^ 0x9e3779b9);
   const stats = {
     winner: null,
@@ -44,6 +46,7 @@ export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, game
       }
       if (type === 'soldiersClashed') stats.clashes += 1;
       if (type === 'monsterDefeated') stats.monstersDefeated += 1;
+      if (type === 'gameOver') stats.reason = e.reason ?? null;
       if (type === 'monsterAttackedCastle') {
         stats.monsterCastleDamage += e.amount;
         if (e.hp <= 0) stats.endedByMonster = true;
@@ -123,6 +126,8 @@ export function summarize(results, strategies) {
     soldierDamageShare: dmg.soldier / totalDmg,
     spellDamageByType: Object.fromEntries(Object.entries(spellBy).map(([k, v]) => [k, v / totalDmg])),
     clashesPerGame: sum((r) => r.clashes) / results.length,
+    avgRounds: results.reduce((a, r) => a + r.finalState.round, 0) / results.length,
+    roundLimitRate: results.filter((r) => r.reason === 'roundLimit').length / results.length,
     monstersDefeatedPerGame: sum((r) => r.monstersDefeated) / results.length,
     monsterCastleDamagePerGame: sum((r) => r.monsterCastleDamage) / results.length,
     endedByMonsterRate: decided.filter((r) => r.endedByMonster).length / (decided.length || 1),
