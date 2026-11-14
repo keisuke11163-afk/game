@@ -56,6 +56,14 @@ const RULE_KEYS = {
   secondPlayerCastleBonus: 0,
 };
 
+/** rules.json の省略できる項目と、省略したときの値 */
+const OPTIONAL_RULES = {
+  // 戦いで相手だけが消えたら、残りの歩数を進み続ける（false なら、そのターンはその場で止まる）
+  advanceAfterWin: false,
+  // 城に着いた兵士が与えるダメージ ＝ 攻撃力 × この値
+  soldierCastleDamageMultiplier: 1,
+};
+
 const ok = () => ({ ok: true });
 const fail = (reason) => ({ ok: false, reason });
 
@@ -72,7 +80,7 @@ export class Game {
     if (typeof rng !== 'function') throw new Error('rng は 0以上1未満の数を返す関数にしてください');
 
     this.cardDefs = cards;
-    this.rules = { ...rules };
+    this.rules = { ...OPTIONAL_RULES, ...rules };
     this.rng = rng;
 
     this.nextCardNumber = 1;
@@ -118,6 +126,13 @@ export class Game {
 
   static validateRules(rules) {
     if (!rules || typeof rules !== 'object') throw new Error('rules.json の中身を渡してください');
+    if (rules.advanceAfterWin !== undefined && typeof rules.advanceAfterWin !== 'boolean') {
+      throw new Error('rules.json の advanceAfterWin は true か false にしてください（書かなければ false）');
+    }
+    const m = rules.soldierCastleDamageMultiplier;
+    if (m !== undefined && (!Number.isInteger(m) || m < 1)) {
+      throw new Error('rules.json の soldierCastleDamageMultiplier は 1 以上の整数にしてください（書かなければ 1）');
+    }
     for (const [key, min] of Object.entries(RULE_KEYS)) {
       const v = rules[key];
       if (!Number.isInteger(v) || v < min) {
@@ -303,38 +318,43 @@ export class Game {
       const enemy = this.players[soldier.targetId];
       const road = this.findRoad(soldier.roadId);
 
-      const from = soldier.position;
-      let opponent = this.findClashTarget(soldier, enemy);
       let steps = 0;
-      while (!opponent && steps < soldier.speed) {
-        soldier.moveForward();
-        steps += 1;
-        if (soldier.hasReachedCastle(laneLength)) break;
-        opponent = this.findClashTarget(soldier, enemy);
-      }
-
-      const reached = soldier.hasReachedCastle(laneLength);
-      if (steps > 0) {
-        // 城に着いた兵士は城の位置（laneLength）まで動いたことにする
-        this.emit('soldierMoved', {
-          playerId: player.id,
-          soldierId: soldier.soldierId,
-          roadId: road.roadId,
-          from,
-          to: reached ? laneLength : soldier.position,
-        });
-      }
-
-      if (opponent) {
+      let reached = false;
+      // advanceAfterWin のときは、戦って相手だけが消えたら、残りの歩数でもう一度進む
+      for (;;) {
+        const from = soldier.position;
+        let opponent = this.findClashTarget(soldier, enemy);
+        let moved = 0;
+        while (!opponent && steps < soldier.speed) {
+          soldier.moveForward();
+          steps += 1;
+          moved += 1;
+          if (soldier.hasReachedCastle(laneLength)) break;
+          opponent = this.findClashTarget(soldier, enemy);
+        }
+        reached = soldier.hasReachedCastle(laneLength);
+        if (moved > 0) {
+          // 城に着いた兵士は城の位置（laneLength）まで動いたことにする
+          this.emit('soldierMoved', {
+            playerId: player.id,
+            soldierId: soldier.soldierId,
+            roadId: road.roadId,
+            from,
+            to: reached ? laneLength : soldier.position,
+          });
+        }
+        if (!opponent) break;
         this.fight(player, soldier, enemy, opponent);
-        continue;
+        const keepGoing = this.rules.advanceAfterWin && opponent.isDead && !soldier.isDead && steps < soldier.speed;
+        if (!keepGoing) break;
       }
       if (!reached) continue;
 
-      enemy.castle.takeDamage(soldier.attack);
+      const damage = soldier.attack * this.rules.soldierCastleDamageMultiplier;
+      enemy.castle.takeDamage(damage);
       this.emit('castleDamaged', {
         playerId: enemy.id,
-        amount: soldier.attack,
+        amount: damage,
         hp: enemy.castle.hp,
         source: { kind: 'soldier', soldierId: soldier.soldierId },
       });
