@@ -60,7 +60,7 @@ YouTube「桜井政博のゲーム作るには」の考え方を、このゲー�
 
 | 領域 | フォルダ・ファイル | 内容 |
 |---|---|---|
-| ゲームロジック | `js/game/`、`data/` | ターン進行、兵士の進軍、カード効果、勝敗判定、数値データ |
+| ゲームロジック | `js/game/`、`data/`、`tests/` | ターン進行、兵士の進軍、カード効果、勝敗判定、数値データ、自動テストとシミュレーション |
 | 画面（UI） | `index.html`、`css/`、`js/ui/`、`js/main.js`、`assets/` | レイアウト、手札の表示、アニメーション、入力、Game と UI の接続、画像素材 |
 | 共有 | `CLAUDE.md` | 変更は2人で相談してから。PRで相手の承認を必須とする |
 
@@ -70,6 +70,11 @@ YouTube「桜井政博のゲーム作るには」の考え方を、このゲー�
 
 - HTML / CSS / JavaScript（フレームワークなし、ES Modules）
 - 起動：リポジトリのルートで `python3 -m http.server` を実行し、`http://localhost:8000` を開く（Windows は `python -m http.server`）
+- 自動テスト：リポジトリのルートで `node --test`（Node.js 22.7 以上。`package.json` がなくても `.js` を ES Modules として読めるのが 22.7 から。外部パッケージは使わない）。ロジックを変えたら必ず全部通してからPRを出す。新しい機能にはテストを足す
+- バランスのシミュレーション：`node tests/sim/run.js`（いろいろな戦い方の組み合わせで各1000試合）。乱数はシード付きなので、同じ引数なら誰が回しても同じ結果になる
+  - `--games 200`（試合数）、`--seed 7`、`--match smart,random`（1つの組み合わせだけ）、`--rules '{"castleMaxHp":30}'`・`--cards '{"fireball":{"count":3}}'`（`data/` を書き換えずに一部の値だけ試す）、`--json`
+  - 「出せる種類が2以上」の列は、出せるカードが2種類以上あったターンの割合（目安）。本当に迷うかは人が遊んで確かめる
+  - 戦い方（`tests/sim/strategies.js`）：`random`（出せるカードからランダム）、`aggro`（城への魔法 → 兵士）、`smart`（ほどよく考える）、`defensive`（守り優先）、`guard`（兵士で守る）、`pass`（何も出さない）
 - 数値はコードに直接書かない（バランス調整をJSONだけでできるようにするため）
   - カードの数値 → `data/cards.json`
   - ルールの数値（城HP、手札枚数、道の長さ `laneLength` など）→ `data/rules.json`
@@ -97,6 +102,14 @@ js/
 data/
   cards.json       … カードの定義
   rules.json       … ルールの数値
+tests/             … 自動テスト（node --test）。Node.js だけで動く
+  helpers.js       … data/ と fixtures/ の読み込み、シード付き乱数、イベントの記録
+  fixtures/        … テスト用の固定データ（data/ を調整してもロジックのテストが落ちないように）
+  *.test.js        … テスト本体
+  sim/             … バランス確認のシミュレーション
+    sim.js         … 1試合・何試合も回して数字を集める
+    strategies.js  … 戦い方（random / aggro / smart / defensive / guard / pass）
+    run.js         … 表を出すコマンド
 assets/            … 画像素材（UI担当）
   STYLE.md         … 絵柄の決まりと、画像生成AIに使う共通の指示文
   CREDITS.md       … 素材ごとの出どころとライセンス
@@ -140,7 +153,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 | メソッド | 説明 |
 |---|---|
 | `new Game({ cards, rules, rng })` | ゲームを作る。`cards` / `rules` は `data/` の JSON の中身（Game はファイルを読まない）。`rng` は 0以上1未満を返す乱数で、省略すると `Math.random`。作った時点で初期手札は配られていて、`phase` は `"ready"`。イベントは出さない |
-| `game.start()` | ゲームを始める。全イベントを `on()` で購読してから呼ぶと、p1 のターン1が始まる（`turnStarted` → 進軍） |
+| `game.start()` | ゲームを始める。全イベントを `on()` で購読してから呼ぶと、p1 のターン1が始まる（`turnStarted` → ドロー → 進軍） |
 | `game.getState(viewerId)` | 今の状態をただのオブジェクトで返す。`viewerId` の手札は中身まで、相手の手札は枚数だけ入る |
 | `game.canPlayCard(cardId)` | そのカードを今出せるかを返す（読むだけで、状態は変わらない）。出せないときは `{ ok: false, reason }`。`playCard` と同じ判定なので、UIは出せない理由を前もって表示できる |
 | `game.playCard(cardId, target)` | カードを使う。STEP 1 では対象が自動で決まるので `target` は省略してよい（将来の魔物や対象選択のために残す） |
@@ -212,7 +225,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `cardDiscarded` | `{ playerId, cardIds }` |
 | `soldierDeployed` | `{ playerId, soldierId, type, position, hp, attack }` … `hp` / `attack` は出した時点の値 |
 | `soldierMoved` | `{ playerId, soldierId, from, to }` |
-| `soldiersClashed` | `{ attacker: { playerId, soldierId }, defender: { playerId, soldierId }, square }` … 道の上で兵士同士がぶつかった。`attacker` は進軍中の側、`square` は道のマス番号 |
+| `soldiersClashed` | `{ attacker: { playerId, soldierId }, defender: { playerId, soldierId }, square }` … 道の上で兵士同士がぶつかった。`attacker` は進軍中の側。`square` は**攻める側が止まったマス**の道のマス番号（1マス先の相手と戦うときも攻める側のマス） |
 | `soldierDamaged` | `{ playerId, soldierId, amount, hp }` |
 | `soldierDestroyed` | `{ playerId, soldierId, reason }` … `reason` は `"killed"` か `"reachedCastle"` |
 | `spellCast` | `{ playerId, type, target }` … `target` は効果を受けるプレイヤーID（ファイアボール・サンダーは相手、ヒールは自分） |
@@ -226,7 +239,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   - ドロー：山札が途中で尽きたら `deckShuffled` → 残りを引く。`cardDrawn` は引いたぶんを1回にまとめて出す。1枚も引かなければ `cardDrawn` は出さない
   - 進軍：兵士は出した順に1体ずつ動く。城に着いた兵士は `soldierMoved` → `castleDamaged` → `soldierDestroyed`（`"reachedCastle"`）の順に出す
   - 城に着いた兵士の `soldierMoved.to` は `laneLength` にそろえる（5以上に進んでも 5）
-  - 兵士同士が戦うとき：`soldierMoved`（止まった位置まで。動かなければ出さない）→ `soldiersClashed` → `soldierDamaged`（守る側）→ `soldierDamaged`（攻める側）→ HPが0以下の兵士の `soldierDestroyed`（`"killed"`）
+  - 兵士同士が戦うとき：`soldierMoved`（止まった位置まで。動かなければ出さない）→ `soldiersClashed` → `soldierDamaged`（守る側）→ `soldierDamaged`（攻める側）→ HPが0以下の兵士の `soldierDestroyed`（`"killed"`）。両方消えるときは**守る側 → 攻める側**の順（`soldierDamaged` と同じ順番）
   - 進軍の途中で城HPが0以下になったら、残りの兵士は動かさずにすぐ `gameOver` を出す
 - カードを出したとき：`cardPlayed` のあと
   - 兵士：`soldierDeployed`
