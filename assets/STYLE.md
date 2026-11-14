@@ -111,6 +111,9 @@ Cartoon game effect sprite, [内容], bright colors, transparent background.
 | `lightning.png` | a jagged yellow lightning strike hitting the ground |
 | `heal.png` | a green healing sparkle burst with small hearts |
 | `dust.png` | a puffy brown dust cloud from a clash |
+| `fireball.png` | a flying round fireball with a short flame tail, cheeky face, seen from the side |
+
+- `fireball.png` ができるまでは、画面側（`js/ui/assets.js` の `OVERRIDES`）で `cards/card-fireball.png` を丸く切り抜いて代わりに飛ばしている。ファイルを置けば自動で本物に替わる
 
 ### 画面の部品（`ui/`）
 
@@ -124,3 +127,24 @@ Fantasy mobile game UI element, [内容], cartoon style, transparent background,
 | `sign-hp.png` | a small wooden signboard on a post |
 | `banner-win.png` | a red ribbon banner with a gold crown above it |
 | `page-handover.png` | an old parchment page with a slightly curled corner |
+| `panel-parchment.png` | a horizontal parchment panel with a simple brown border. The border pattern is uniform all around (same thickness and pattern on every side, plain rounded corners), and the center area is completely plain parchment with no marks, so it can be stretched as a 9-slice |
+| `icon-heart.png` | a small chubby red heart icon, simple and bold, readable at 16px |
+| `icon-sword.png` | a small short sword icon pointing up-right, silver blade and gold guard, simple and bold, readable at 16px |
+| `card-back.png` | the back of a fantasy playing card, 2:3 portrait, warm wooden-brown with a gold star emblem in the center and a gold border |
+
+#### 画面の部品の大きさと、文字が乗る場所
+
+画面側で文字や数字を重ねるので、次の場所はあけておく。
+
+| ファイル | 大きさの目安 | 文字が乗る場所・注意 |
+|---|---|---|
+| `button-end-turn.png` | 512×192 | 板の真ん中に「ターン終了」「もう1回」「使う」などを重ねる |
+| `sign-hp.png` | 256×256 | 看板の板（上から 15〜60% あたり）にHPの数字を重ねる |
+| `page-handover.png` | 768×1024 | 内側（上下左右 12% より内側）に文字と城の絵を重ねる |
+| `banner-win.png` | 1024×512 | 帯の部分（上から 45〜80% あたり）に「プレイヤー1の勝ち！」を重ねる。王冠は帯の上 |
+| `panel-parchment.png` | 512×256 | 9分割で伸ばす。ふちの幅は 56px 以内に収め、真ん中は無地にする（`js/ui/config.js` の `panel.slice` と合わせる） |
+| `icon-heart.png`、`icon-sword.png` | 128×128 | 兵士の足元とカードのメダルに 13〜16px で出す。細かい模様は入れない |
+| `card-back.png` | 512×768 | 相手の手札・山札・捨て札の束に、小さく（幅 21px ほど）出す |
+
+- カードの枠（`frame-*.png`）は、絵の窓・名前の帯・左右のメダルの位置を `js/ui/config.js` の `card.layout` に合わせる（窓：左 12%・上 13%・幅 76%・高さ 50%、名前の帯：上から 75% を中心に高さ 14%、メダル：左右とも上から 10%・横 14% と 86%）。位置が違う枠を作ったら、`card.layout` の数値を直す
+- 背景（`bg/board.png`）の飛び石は、画面のマスとぴったり合わなくてよい。マスの位置は `js/ui/config.js` の `board.road` で背景に合わせる

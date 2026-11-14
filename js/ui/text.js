@@ -46,3 +46,22 @@ export function reasonText(reason) {
   if (!reason) return 'いまはこの操作はできません';
   return REASON_TEXT[reason] ?? String(reason);
 }
+
+// 魔法の効果ごとに、カードの角に出す数字の形
+const EFFECT_NUMBER = {
+  healOwnCastle: (c) => `+${c.amount}`,
+};
+
+/**
+ * カードの角のメダルに出す数字 [左上, 右上]。兵士は攻撃とHP、魔法は効果の量（左上だけ）
+ * @returns {[{text:string, icon:string}|null, {text:string, icon:string}|null]}
+ */
+export function cardNumbers(def) {
+  if (!def) return [null, null];
+  if (def.kind === 'soldier') {
+    return [{ text: String(def.attack), icon: 'sword' }, { text: String(def.hp), icon: 'heart' }];
+  }
+  if (def.amount == null) return [null, null];
+  const make = EFFECT_NUMBER[def.effect];
+  return [{ text: make ? make(def) : String(def.amount), icon: '' }, null];
+}

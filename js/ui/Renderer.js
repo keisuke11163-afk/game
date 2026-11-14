@@ -1,7 +1,14 @@
-// 盤面（城・レーン・兵士・枚数表示）を描く。
+// 盤面（城・1本の道・兵士・枚数表示）を描く。
 // ゲームの状態は書き換えない。main.js が持つ「表示用の状態」を受け取って描くだけ。
+//
+// 道は1本。マスの数は rules.laneLength から読む（決め打ちしない）。
+// 兵士は CLAUDE.md の「道のマス番号」（p1 の城側が 0）に直して置く：
+//   p1 の兵士 → position、p2 の兵士 → laneLength - 1 - position
+// 画面では、見ている人（手番の人）の城が下になるように上下を入れ替える。
 
+import { UI_CONFIG } from './config.js';
 import { playerName } from './text.js';
+import { PLAYER_COLOR, src, aspect, castleKey, unitKey } from './assets.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -20,8 +27,8 @@ export class Renderer {
     this.el = {
       app: $('app'),
       board: $('board'),
-      field: $('field'),
-      oppName: $('opp-name'),
+      squares: $('squares'),
+      units: $('units'),
       oppHandCount: $('opp-hand-count'),
       turnInfo: $('turn-info'),
       deckPile: $('deck-pile'),
@@ -29,13 +36,12 @@ export class Renderer {
       deckCount: $('deck-count'),
       discardCount: $('discard-count'),
       castle: { me: $('castle-me'), opp: $('castle-opp') },
-      castleLabel: { me: $('castle-me-label'), opp: $('castle-opp-label') },
-      lane: { me: $('lane-me'), opp: $('lane-opp') },
     };
 
-    this.buildLanes();
+    this.buildSquares();
+    this.layoutCastles();
 
-    this.el.field.addEventListener('click', (e) => {
+    this.el.units.addEventListener('click', (e) => {
       const el = e.target.closest('.soldier');
       if (!el || !this.onSoldierTap) return;
       const s = this.soldiers.get(el.dataset.id);
@@ -43,14 +49,94 @@ export class Renderer {
     });
   }
 
-  buildLanes() {
-    const L = this.rules.laneLength;
-    document.documentElement.style.setProperty('--cells', String(L));
-    for (const side of ['me', 'opp']) {
-      const cells = this.el.lane[side].querySelector('.cells');
-      cells.innerHTML = '';
-      for (let i = 0; i < L; i++) cells.appendChild(document.createElement('div')).className = 'cell';
+  get laneLength() {
+    return this.rules.laneLength;
+  }
+
+  /** 真ん中のマス（道のマス番号）。マスが偶数で真ん中が1つに決まらなければ null */
+  get centerSquare() {
+    const L = this.laneLength;
+    return L % 2 === 1 ? (L - 1) / 2 : null;
+  }
+
+  // ---------- 位置の計算 ----------
+
+  /**
+   * 画面上の位置（盤面の幅・高さに対する割合）。row は下から数えたマスの段（0 = いちばん下）
+   * @returns {{ x: number, y: number }}
+   */
+  rowPoint(row) {
+    const r = UI_CONFIG.board.road;
+    const L = this.laneLength;
+    const t = L > 1 ? row / (L - 1) : 0.5;
+    const y = r.bottom - t * (r.bottom - r.top);
+    const x = r.x + r.sway * Math.sin((t + r.swayPhase) * Math.PI * 2);
+    return { x, y };
+  }
+
+  /** 道のマス番号 → 下から数えた段。見ている人の城側が下 */
+  squareToRow(square) {
+    return this.viewerId === 'p1' ? square : this.laneLength - 1 - square;
+  }
+
+  /** 兵士の position → 道のマス番号（CLAUDE.md の式） */
+  squareOf(playerId, position) {
+    return playerId === 'p1' ? position : this.laneLength - 1 - position;
+  }
+
+  /** 兵士の位置（割合）。城に着いた兵士（position >= laneLength）は相手の城の前 */
+  soldierPoint(playerId, position) {
+    if (position >= this.laneLength) {
+      const c = UI_CONFIG.board.castle;
+      const enemyIsTop = this.sideOf(playerId) === 'me';
+      return { x: c.x, y: enemyIsTop ? c.topY + c.reachY : c.bottomY - c.reachY };
     }
+    return this.rowPoint(this.squareToRow(this.squareOf(playerId, Math.max(0, position))));
+  }
+
+  /** 割合 → 盤面の中の px */
+  toPx({ x, y }) {
+    const r = this.el.board.getBoundingClientRect();
+    return { x: x * r.width, y: y * r.height };
+  }
+
+  // ---------- 盤面の部品 ----------
+
+  buildSquares() {
+    const box = this.el.squares;
+    box.innerHTML = '';
+    const size = UI_CONFIG.board.squareSize;
+    box.style.setProperty('--square-size', `${size}px`);
+    for (let sq = 0; sq < this.laneLength; sq++) {
+      const el = document.createElement('div');
+      el.className = 'square';
+      el.dataset.square = String(sq);
+      if (sq === this.centerSquare) el.classList.add('center');
+      el.innerHTML = `<span class="square-no">${sq}</span>`;
+      box.appendChild(el);
+    }
+    this.placeSquares();
+  }
+
+  placeSquares() {
+    for (const el of this.el.squares.children) {
+      const p = this.rowPoint(this.squareToRow(Number(el.dataset.square)));
+      el.style.left = `${p.x * 100}%`;
+      el.style.top = `${p.y * 100}%`;
+    }
+  }
+
+  layoutCastles() {
+    const c = UI_CONFIG.board.castle;
+    const root = this.el.board.style;
+    root.setProperty('--castle-h', `${c.height * 100}%`);
+    root.setProperty('--castle-x', `${c.x * 100}%`);
+    root.setProperty('--castle-top-y', `${c.topY * 100}%`);
+    root.setProperty('--castle-bottom-y', `${c.bottomY * 100}%`);
+    root.setProperty('--sign-left', `${(0.5 + c.signOffset) * 100}%`);
+    root.setProperty('--sign-h', `${c.signSize * 100}%`);
+    root.setProperty('--unit-size', `${UI_CONFIG.board.unitSize}px`);
+    root.setProperty('--castle-aspect', String(1 / aspect(castleKey('blue'))));
   }
 
   // ---------- 視点 ----------
@@ -61,21 +147,14 @@ export class Renderer {
     this.viewerId = viewerId;
     this.el.app.dataset.viewer = viewerId;
     const opp = this.opponentOf(viewerId);
-    this.el.oppName.textContent = playerName(opp);
-    this.el.castleLabel.me.textContent = `${playerName(viewerId)}の城（あなた）`;
-    this.el.castleLabel.opp.textContent = `${playerName(opp)}の城`;
-    this.el.lane.me.querySelector('.lane-label').textContent = '▲';
-    this.el.lane.opp.querySelector('.lane-label').textContent = '▼';
-    // マス番号：自分のレーンは下から、相手のレーンは上から 0,1,2…（兵士の位置と同じ数え方）
-    const L = this.rules.laneLength;
-    for (const side of ['me', 'opp']) {
-      this.el.lane[side].querySelectorAll('.cell').forEach((cell, i) => {
-        let no = cell.querySelector('.cell-no');
-        if (!no) no = cell.appendChild(document.createElement('span'));
-        no.className = 'cell-no';
-        no.textContent = String(side === 'me' ? L - 1 - i : i);
-      });
+    for (const [side, id] of [['me', viewerId], ['opp', opp]]) {
+      const castle = this.el.castle[side];
+      castle.dataset.player = id;
+      castle.dataset.color = PLAYER_COLOR[id];
+      castle.querySelector('.castle-img').src = src(castleKey(PLAYER_COLOR[id]));
+      castle.querySelector('.castle-name').textContent = side === 'me' ? `${playerName(id)}\n（あなた）` : playerName(id);
     }
+    this.placeSquares();
   }
 
   opponentOf(playerId) {
@@ -90,8 +169,13 @@ export class Renderer {
     return this.el.castle[this.sideOf(playerId)];
   }
 
-  laneEl(playerId) {
-    return this.el.lane[this.sideOf(playerId)];
+  /** 演出の的にする要素（城の絵） */
+  castleImgEl(playerId) {
+    return this.castleEl(playerId).querySelector('.castle-img');
+  }
+
+  squareEl(square) {
+    return this.el.squares.querySelector(`.square[data-square="${square}"]`);
   }
 
   // ---------- まとめて描く ----------
@@ -119,6 +203,7 @@ export class Renderer {
 
   setOppHandCount(count) {
     this.el.oppHandCount.textContent = String(count);
+    this.el.oppHandCount.closest('.opp-hand').dataset.count = String(Math.min(count, 3));
   }
 
   bump(el) {
@@ -130,69 +215,71 @@ export class Renderer {
   setCastleHp(playerId, hp, { instant = false } = {}) {
     const castle = this.castleEl(playerId);
     const max = this.rules.castleMaxHp;
-    const ratio = Math.max(0, Math.min(1, hp / max));
-    const fill = castle.querySelector('.hp-fill');
-    const lag = castle.querySelector('.hp-lag');
-    if (instant) {
-      fill.style.transition = lag.style.transition = 'none';
-      void fill.offsetWidth;
-    }
-    fill.style.width = `${ratio * 100}%`;
-    lag.style.width = `${ratio * 100}%`;
-    if (instant) {
-      void fill.offsetWidth;
-      fill.style.transition = lag.style.transition = '';
-    }
-    fill.classList.toggle('mid', ratio <= 0.5 && ratio > 0.25);
-    fill.classList.toggle('low', ratio <= 0.25);
-    castle.querySelector('.hp-value').textContent = String(Math.max(0, hp));
-    castle.querySelector('.hp-max').textContent = `/${max}`;
+    const value = castle.querySelector('.hp-value');
+    const shown = Math.max(0, hp);
+    const changed = value.textContent !== String(shown);
+    value.textContent = String(shown);
+    castle.classList.toggle('low', hp / max <= 0.25);
+    if (changed && !instant) this.bump(castle.querySelector('.hp-sign'));
   }
 
   // ---------- 兵士 ----------
 
-  /** 兵士の位置 → レーン上の top(%)。城に着いた兵士は相手の城に重なる位置 */
-  topPercent(playerId, position) {
-    const L = this.rules.laneLength;
-    const pos = Math.max(0, Math.min(position, L));
-    const fromTop = this.sideOf(playerId) === 'me' ? L - 1 - pos : pos;
-    return (fromTop / L) * 100;
-  }
-
   addSoldier(playerId, { soldierId, type, hp, attack, position }, { appear = false } = {}) {
     const def = this.cards[type] ?? {};
     const el = document.createElement('div');
-    el.className = `soldier ${type} no-anim`;
+    el.className = `soldier ${type} ${this.sideOf(playerId)}`;
     el.dataset.id = soldierId;
+    el.dataset.player = playerId;
     if (appear) el.classList.add('appear');
-    el.innerHTML = `<div class="soldier-token"><span class="soldier-mark"></span>` +
-      `<span class="soldier-badge soldier-atk"></span><span class="soldier-badge soldier-hp"></span></div>`;
-    el.querySelector('.soldier-mark').textContent = (def.name ?? type).charAt(0);
-    this.laneEl(playerId).querySelector('.soldier-layer').appendChild(el);
-    const s = { el, playerId, soldierId, type, hp: hp ?? def.hp, attack: attack ?? def.attack, position };
+    el.innerHTML =
+      '<div class="soldier-body"><img class="unit-img" alt=""></div>' +
+      '<div class="badges"><span class="badge hp"><i class="icon heart"></i><b class="outlined"></b></span>' +
+      '<span class="badge atk"><i class="icon sword"></i><b class="outlined"></b></span></div>';
+    el.querySelector('.unit-img').src = src(unitKey(type, PLAYER_COLOR[playerId]));
+    el.querySelector('.unit-img').alt = def.name ?? type;
+    this.el.units.appendChild(el);
+    const s = { el, playerId, soldierId, type, hp: hp ?? def.hp, attack: attack ?? def.attack, position, offset: 0 };
     this.soldiers.set(soldierId, s);
     this.updateSoldierBadges(s);
-    el.style.top = `${this.topPercent(playerId, position)}%`;
-    void el.offsetWidth; // 位置を確定させてからアニメーションを有効にする
-    el.classList.remove('no-anim');
     this.layoutStacks();
     return el;
   }
 
   updateSoldierBadges(s) {
-    s.el.querySelector('.soldier-hp').textContent = `❤${Math.max(0, s.hp)}`;
-    s.el.querySelector('.soldier-atk').textContent = `⚔${s.attack}`;
+    s.el.querySelector('.badge.hp b').textContent = String(Math.max(0, s.hp));
+    s.el.querySelector('.badge.atk b').textContent = String(s.attack);
   }
 
   soldierEl(soldierId) {
     return this.soldiers.get(soldierId)?.el ?? null;
   }
 
+  soldier(soldierId) {
+    return this.soldiers.get(soldierId) ?? null;
+  }
+
+  /** 兵士の今の位置（盤面の中の px。重なりのずれを含む） */
+  soldierPx(soldierId) {
+    const s = this.soldiers.get(soldierId);
+    if (!s) return null;
+    const p = this.toPx(this.soldierPoint(s.playerId, s.position));
+    return { x: p.x + s.offset, y: p.y };
+  }
+
   moveSoldier(soldierId, position) {
     const s = this.soldiers.get(soldierId);
     if (!s) return;
     s.position = position;
-    s.el.style.top = `${this.topPercent(s.playerId, position)}%`;
+    this.placeSoldier(s);
+  }
+
+  placeSoldier(s) {
+    const p = this.soldierPoint(s.playerId, s.position);
+    s.el.style.left = `calc(${p.x * 100}% + ${s.offset}px)`;
+    s.el.style.top = `${p.y * 100}%`;
+    // 下にいる兵士ほど手前に描く
+    s.el.style.zIndex = String(10 + Math.round(p.y * 100));
   }
 
   setSoldierHp(soldierId, hp) {
@@ -216,17 +303,25 @@ export class Renderer {
     this.soldiers.clear();
   }
 
-  /** 同じマスにいる兵士を横に少しずつずらす */
+  /** 同じマスにいる兵士を横に少しずつずらして重ねる（どちらのプレイヤーの兵士もまとめて数える） */
   layoutStacks() {
     const groups = new Map();
     for (const s of this.soldiers.values()) {
-      const key = `${s.playerId}:${Math.min(s.position, this.rules.laneLength)}`;
+      const key = s.position >= this.laneLength
+        ? `castle:${s.playerId}`
+        : `sq:${this.squareOf(s.playerId, Math.max(0, s.position))}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(s);
     }
+    const step = UI_CONFIG.board.stackOffset;
     for (const list of groups.values()) {
-      const step = list.length > 3 ? 14 : 22;
-      list.forEach((s, i) => s.el.style.setProperty('--offset', `${(i - (list.length - 1) / 2) * step}px`));
+      // 自分の兵士を右、相手の兵士を左に寄せて、敵味方が混ざって見えないようにする
+      list.sort((a, b) => (a.playerId === this.viewerId) - (b.playerId === this.viewerId));
+      const w = list.length > 3 ? step * 0.7 : step;
+      list.forEach((s, i) => {
+        s.offset = (i - (list.length - 1) / 2) * w;
+        this.placeSoldier(s);
+      });
     }
   }
 
@@ -241,13 +336,11 @@ export class Renderer {
           this.addSoldier(playerId, st);
           continue;
         }
-        s.el.classList.add('no-anim');
-        this.moveSoldier(st.soldierId, st.position);
-        this.setSoldierHp(st.soldierId, st.hp);
+        s.position = st.position;
+        s.hp = st.hp;
         s.attack = st.attack;
         this.updateSoldierBadges(s);
-        void s.el.offsetWidth;
-        s.el.classList.remove('no-anim', 'hit', 'appear');
+        s.el.classList.remove('hit', 'appear', 'dying', 'arrived');
       }
     }
     for (const id of [...this.soldiers.keys()]) if (!alive.has(id)) this.removeSoldier(id);

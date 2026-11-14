@@ -3,109 +3,108 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#151a26">
+  <meta name="theme-color" content="#9ccf6e">
   <title>キャッスルフィールド</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div id="app">
-    <!-- 上：相手の情報と、山札・捨て札 -->
+    <div id="bg" aria-hidden="true"></div>
+
+    <!-- 上：相手の手札・ターン・山札と捨て札 -->
     <header id="top-bar">
-      <div class="opp-info">
-        <span class="player-name" id="opp-name"></span>
-        <span class="opp-hand" title="相手の手札">
-          <span class="card-back-icon" aria-hidden="true"></span>
-          <b id="opp-hand-count">0</b>枚
-        </span>
+      <div class="opp-hand" title="相手の手札">
+        <span class="card-stack" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="outlined num" id="opp-hand-count">0</span>
       </div>
-      <div class="turn-info" id="turn-info"></div>
-      <div class="pile-info">
-        <span class="pile" id="deck-pile">山札 <b id="deck-count">0</b></span>
-        <span class="pile" id="discard-pile">捨て札 <b id="discard-count">0</b></span>
+      <div class="turn-info outlined" id="turn-info"></div>
+      <div class="piles">
+        <span class="pile" id="deck-pile" title="山札">
+          <span class="card-stack" aria-hidden="true"><i></i><i></i></span>
+          <span class="outlined num" id="deck-count">0</span>
+        </span>
+        <span class="pile discard" id="discard-pile" title="捨て札">
+          <span class="card-stack" aria-hidden="true"><i></i><i></i></span>
+          <span class="outlined num" id="discard-count">0</span>
+        </span>
       </div>
     </header>
 
-    <!-- 盤面：相手の城 / 2本のレーン / 自分の城 -->
+    <!-- 盤面：相手の城 / 1本の道 / 自分の城 -->
     <main id="board">
+      <div id="squares" aria-hidden="true"></div>
       <section class="castle" id="castle-opp" data-side="opp">
-        <div class="castle-body">
-          <div class="castle-wall" aria-hidden="true"></div>
-          <div class="castle-label" id="castle-opp-label"></div>
-          <div class="hp-row">
-            <div class="hp-bar"><div class="hp-lag"></div><div class="hp-fill"></div></div>
-            <div class="hp-text"><b class="hp-value">0</b><span class="hp-max"></span></div>
-          </div>
-        </div>
+        <img class="castle-img" alt="">
+        <div class="hp-sign"><img class="sign-img" alt=""><span class="hp-value outlined">0</span></div>
+        <span class="castle-name outlined"></span>
       </section>
-
-      <section id="field">
-        <div class="lane" id="lane-opp" data-side="opp">
-          <div class="lane-label"></div>
-          <div class="cells"></div>
-          <div class="soldier-layer"></div>
-        </div>
-        <div class="lane" id="lane-me" data-side="me">
-          <div class="lane-label"></div>
-          <div class="cells"></div>
-          <div class="soldier-layer"></div>
-        </div>
-        <div id="drop-hint" hidden>ここで離すと使う</div>
-      </section>
-
       <section class="castle" id="castle-me" data-side="me">
-        <div class="castle-body">
-          <div class="castle-wall" aria-hidden="true"></div>
-          <div class="castle-label" id="castle-me-label"></div>
-          <div class="hp-row">
-            <div class="hp-bar"><div class="hp-lag"></div><div class="hp-fill"></div></div>
-            <div class="hp-text"><b class="hp-value">0</b><span class="hp-max"></span></div>
-          </div>
-        </div>
+        <img class="castle-img" alt="">
+        <div class="hp-sign"><img class="sign-img" alt=""><span class="hp-value outlined">0</span></div>
+        <span class="castle-name outlined"></span>
       </section>
+      <div id="units"></div>
+      <div id="drop-hint" class="outlined" hidden>ここで離すと使う</div>
     </main>
 
     <!-- 下：自分の操作 -->
     <footer id="controls">
-      <div id="card-detail" hidden>
+      <div id="card-detail" class="parchment" hidden>
         <div class="detail-text">
-          <div class="detail-head"><span class="detail-kind"></span><b class="detail-name"></b></div>
+          <div class="detail-head"><b class="detail-name"></b><span class="detail-kind"></span></div>
           <div class="detail-desc"></div>
           <div class="detail-hint"></div>
         </div>
-        <button type="button" class="detail-use">使う</button>
+        <button type="button" class="detail-use plank-button"><span>使う</span></button>
       </div>
-      <div id="discard-bar" hidden>
+      <div id="discard-bar" class="parchment" hidden>
         <span class="discard-msg"></span>
-        <button type="button" class="discard-ok">捨てる</button>
+        <button type="button" class="discard-ok plank-button"><span>捨てる</span></button>
       </div>
       <div class="control-row">
-        <p id="message"></p>
-        <button id="end-turn" type="button">ターン終了</button>
+        <p id="message" class="outlined"></p>
+        <button id="end-turn" type="button" class="plank-button"><span>ターン終了</span></button>
       </div>
       <div id="hand"></div>
     </footer>
 
-    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="toast" class="parchment" role="status" aria-live="polite"></div>
     <div id="fx-layer" aria-hidden="true"></div>
 
     <!-- 手番交代：相手の手札を隠す -->
     <div id="handover" class="screen" hidden>
-      <div class="screen-box">
-        <p class="handover-turn"></p>
-        <p class="handover-title"></p>
-        <p class="screen-sub">タップして始める</p>
+      <div class="page">
+        <img class="page-img" alt="">
+        <div class="page-text">
+          <p class="handover-turn"></p>
+          <img class="handover-castle" alt="">
+          <p class="handover-title"></p>
+          <p class="screen-sub">タップしてはじめる</p>
+        </div>
       </div>
     </div>
 
     <!-- 勝敗 -->
     <div id="result" class="screen" hidden>
       <div class="confetti" aria-hidden="true"></div>
-      <div class="screen-box">
-        <p class="result-crown" aria-hidden="true">👑</p>
-        <p class="result-title"></p>
-        <p class="result-sub"></p>
-        <button type="button" id="rematch">もう1回</button>
+      <div class="result-box">
+        <img class="result-castle" alt="">
+        <div class="banner">
+          <img class="banner-img" alt="">
+          <p class="result-title outlined"></p>
+        </div>
+        <p class="result-sub outlined"></p>
+        <button type="button" id="rematch" class="plank-button big"><span>もう1回</span></button>
       </div>
+    </div>
+
+    <!-- 読み込み中 -->
+    <div id="loading">
+      <p class="loading-title outlined">キャッスルフィールド</p>
+      <p class="loading-text outlined">読み込み中…</p>
     </div>
 
     <div id="error" hidden></div>
