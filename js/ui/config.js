@@ -19,6 +19,20 @@ export const UI_CONFIG = {
     afterTurnStart: 120,   // 手番開始の画面を開いてから、進軍を始めるまで
     gameOverDelay: 450,    // 決着の一撃のあと、勝敗画面を出すまで
     toast: 2200,           // 「出せない理由」などの表示時間
+    clash: 220,            // 兵士同士・兵士と魔物がぶつかる
+    equip: 300,            // 武器を持たせる・盾をつける・とぎ石
+    status: 320,           // 毒・凍結がかかる
+    statusCleared: 160,    // 毒・凍結が治る
+    armor: 320,            // 城壁を置く・消える
+    round: 520,            // 「第N周」の表示
+    monsterAppear: 600,    // 魔物が出る
+    monsterAttack: 300,    // 魔物が城に飛びかかる
+    monsterDefeat: 600,    // 魔物を倒した
+    coins: 260,            // コインが増える・減る
+    upgrade: 420,          // 強化を買った
+    discard: 150,          // 手札を捨てたあと
+    afterSoldierHit: 160,  // 兵士にダメージが入ったあとの間
+    afterMonsterHit: 120,  // 魔物にダメージが入ったあとの間
   },
 
   // 城にダメージが入ったときの手応え。値 = base + perDamage × ダメージ（max で頭打ち）
@@ -38,10 +52,23 @@ export const UI_CONFIG = {
     shake: 3,
     numberSize: 26,
     numberDuration: 600,
+    shakeDuration: 200,
+  },
+
+  // 魔物にダメージが入ったとき
+  monsterHit: {
+    hitstop: 70,
+    shake: 4,
+    numberSize: 30,
+    numberDuration: 650,
+    shakeDuration: 200,
   },
 
   // 回復の数字
   healNumber: { size: 40, duration: 800 },
+
+  // コイン・盾・城壁などの小さな数字
+  smallNumber: { size: 22, duration: 700 },
 
   // カードの使い方（どれも同時に有効にできる。デバッグパネルから切り替えられる）
   input: {
