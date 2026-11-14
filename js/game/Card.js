@@ -1,7 +1,7 @@
 // カード1枚。数値は data/cards.json の定義から受け取る（コードに数値を書かない）。
 // DOM は使わない（後でサーバーに移すため）。
 
-export const CARD_KINDS = ['soldier', 'spell', 'weapon', 'defense', 'trap'];
+export const CARD_KINDS = ['soldier', 'spell', 'weapon', 'defense'];
 export const ELEMENTS = ['fire', 'water', 'wood'];
 
 /** effect ごとに、必要な数値のキー */
@@ -17,9 +17,6 @@ export const EFFECTS = {
     shieldSoldier: ['amount'],
     armorCastle: ['amount'],
   },
-  trap: {
-    pit: ['amount'],
-  },
 };
 
 /** kind → 出し方（slot）。main は1ターン1枚、addon と defense は何枚でも */
@@ -28,7 +25,6 @@ export const SLOT_OF_KIND = {
   spell: 'main',
   weapon: 'addon',
   defense: 'defense',
-  trap: 'defense',
 };
 
 export class Card {
