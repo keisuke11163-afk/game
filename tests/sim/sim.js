@@ -25,6 +25,7 @@ export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, game
     castleDamage: { soldier: 0, spell: 0, other: 0 },
     monstersDefeated: 0,
     monsterCastleDamage: 0,
+    endedByMonster: false, // 魔物に城を落とされて決着したか
     spellDamageByType: {},
     clashes: 0,
     discardTurns: 0,
@@ -46,7 +47,10 @@ export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, game
       if (type === 'soldiersClashed') stats.clashes += 1;
       if (type === 'monsterDefeated') stats.monstersDefeated += 1;
       if (type === 'gameOver') stats.reason = e.reason ?? null;
-      if (type === 'monsterAttackedCastle') stats.monsterCastleDamage += e.amount;
+      if (type === 'monsterAttackedCastle') {
+        stats.monsterCastleDamage += e.amount;
+        if (e.hp <= 0) stats.endedByMonster = true;
+      }
       if (type === 'cardPlayed') stats.played[e.type] = (stats.played[e.type] || 0) + 1;
     });
   }
@@ -126,6 +130,7 @@ export function summarize(results, strategies) {
     roundLimitRate: results.filter((r) => r.reason === 'roundLimit').length / results.length,
     monstersDefeatedPerGame: sum((r) => r.monstersDefeated) / results.length,
     monsterCastleDamagePerGame: sum((r) => r.monsterCastleDamage) / results.length,
+    endedByMonsterRate: decided.filter((r) => r.endedByMonster).length / (decided.length || 1),
     discardRate: sum((r) => r.discardTurns) / (sum((r) => r.mainTurns) || 1),
     choiceRate: sum((r) => r.choiceTurns) / (sum((r) => r.mainTurns) || 1),
     playedPerGame: Object.fromEntries(

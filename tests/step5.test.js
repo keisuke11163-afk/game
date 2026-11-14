@@ -198,3 +198,18 @@ test('setup の間違い：null は省略と同じ。shared で decks を渡し�
   assert.throws(() => make({ setup: { decks: ['assault', 'balanced'] } }), /deckMode/);
   assert.throws(() => make({ castles: { x: { name: 'x', castleSpellBonus: -1 } } }), /castleSpellBonus/);
 });
+
+test('（試作）lastStanding で手番の人が魔物に城を落とされたら抜けて、同じ周回のまま次の人の番', () => {
+  const cards = loadFixture('cards-step2.json');
+  const monsters = { slime: { name: 'スライム', hp: 30, attack: 1, element: 'water', reward: 2, castleAttack: 5, attackEvery: 1, weight: 1 } };
+  const rules = { ...loadFixture('rules.json'), playerCount: 3, winCondition: 'lastStanding', monsterFirstRound: 1, monsterSpawnChance: 1 };
+  const game = new Game({ cards, rules, rng: () => 0, monsters });
+  const log = recordEvents(game, EVENT_TYPES);
+  game.debugSetCastleHp('p1', 1);
+  game.start(); // 1周目：魔物が出る（rng 0：p1-p2 の道の魔物は p1 を攻める）
+  game.endTurn(); game.endTurn(); game.endTurn(); // 2周目の始め：p1 の城が落ちる
+  assert.ok(game.getState(null).players.p1.eliminated);
+  assert.equal(game.getState(null).phase, 'main');
+  assert.equal(game.getState(null).currentPlayer, 'p2');
+  assert.equal(log.filter((e) => e.event === 'roundStarted').length, 2);
+});

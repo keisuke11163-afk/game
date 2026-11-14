@@ -52,7 +52,7 @@ const ELEMENT_BEATS = { water: 'fire', fire: 'wood', wood: 'water' };
  * メイン以外（付加・防御）のカードを、役に立つときに出す（ほどよく考える戦い方で使う）
  *   武器：まだ武器のない、いちばん前の兵士に。近くの相手の属性に強い属性を選ぶ
  *   盾：いちばん前の兵士に
- *   城壁・トラップ：出せるときは出す（使った枚数ぶん次に引けるので損がない）
+ *   城壁：城HPが半分以下のときだけ（使い切りで、手札も1枚減るため）
  */
 function playSupports(game, pid, ctx) {
   for (let guard = 0; guard < 20; guard++) {
@@ -73,10 +73,8 @@ function playSupports(game, pid, ctx) {
       } else if (def.effect === 'shieldSoldier') {
         if (front.length) played = playWith(game, c.cardId, (ts) => ts.find((t) => t.soldierId === front[0].soldierId));
       } else if (def.effect === 'armorCastle') {
-        // 防御は何枚出しても次に多く引けるので、出せるときは出す
-        played = playWith(game, c.cardId);
-      } else if (def.kind === 'trap') {
-        played = playWith(game, c.cardId);
+        // 城壁は使い切りで手札も1枚減るので、城HPが半分以下のときだけ出す
+        if (me.castleHp * 2 <= me.castleMaxHp) played = playWith(game, c.cardId);
       }
       if (played) break;
     }

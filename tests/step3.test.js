@@ -104,18 +104,36 @@ test('ファイアボールで魔物を狙える。サンダーは魔物を狙�
   assert.deepEqual(log.at(-3).by, { playerId: 'p1', type: 'fireball' });
 });
 
-test('放置すると attackEvery 周ごとに城を攻める。城HPは1より下がらない', () => {
+test('放置すると attackEvery 周ごとに城を攻める。城を落としたら、落とされた方の負け', () => {
   const { game, log } = setup();
   game.debugSetCastleHp('p1', 1);
   game.debugSetCastleHp('p2', 1);
-  for (let i = 0; i < 4; i++) game.endTurn(); // 3周目の始めに攻める（attackEvery 2）
+  for (let i = 0; i < 4; i++) game.endTurn(); // 3周目の始め（p1 のターン）に攻める（attackEvery 2）
   const atk = log.filter((e) => e.event === 'monsterAttackedCastle');
   assert.equal(atk.length, 1);
-  assert.equal(atk[0].amount, 0);
-  assert.equal(atk[0].hp, 1);
-  assert.equal(game.getState(null).phase, 'main');
+  assert.equal(atk[0].amount, 1);
+  assert.equal(atk[0].hp, 0);
   const i = log.indexOf(atk[0]);
   assert.equal(log[i - 1].event, 'roundStarted');
+  // そのあとは gameOver だけ（魔物の出現・ドロー・進軍はしない）
+  assert.deepEqual(events(log.slice(i + 1)), ['gameOver']);
+  const loser = atk[0].playerId;
+  const st = game.getState(null);
+  assert.equal(st.phase, 'gameOver');
+  assert.equal(st.winner, loser === 'p1' ? 'p2' : 'p1');
+  assert.equal(game.endTurn().ok, false);
+});
+
+test('手番の人（p1）の城が魔物に落とされたら、p2 の勝ち', () => {
+  const { game, log } = setup();
+  game.debugSetCastleHp('p1', 1);
+  game.rng = () => 0; // 攻める城：道の players[0] ＝ p1
+  for (let i = 0; i < 4; i++) game.endTurn();
+  const atk = log.find((e) => e.event === 'monsterAttackedCastle');
+  assert.equal(atk.playerId, 'p1');
+  assert.equal(game.getState(null).winner, 'p2');
+  assert.equal(log.at(-1).event, 'gameOver');
+  assert.equal(log.at(-1).winner, 'p2');
 });
 
 test('放置した魔物の攻撃：ふつうは castleAttack ぶん減る', () => {
@@ -209,4 +227,20 @@ test('魔物を使うとき laneLength が偶数なら例外', () => {
   const cards = loadFixture('cards-step2.json');
   const rules = { ...loadFixture('rules.json'), laneLength: 6 };
   assert.throws(() => new Game({ cards, rules, monsters: MONSTERS }), /laneLength/);
+});
+
+test('道3マス：魔物は真ん中（マス1）に出て、兵士は出したマスから動かずに戦う。兵士同士はぶつからない', () => {
+  const big = { slime: { ...MONSTERS.slime, hp: 30 } };
+  const { game, log } = setup({ p1: ['knight'], p2: ['infantry'], rules: { laneLength: 3 }, monsters: big });
+  assert.equal(game.getState(null).monsters[0].square, 1);
+  play(game, 'knight');
+  game.endTurn();
+  play(game, 'infantry');
+  game.endTurn(); // p1 騎士：1つ先が魔物 → その場で戦う
+  const i = log.findLastIndex((e) => e.event === 'turnStarted');
+  const seq = events(log.slice(i)).filter((e) => e !== 'cardDrawn');
+  assert.ok(!seq.includes('soldierMoved'));
+  assert.ok(seq.includes('monsterClashed'));
+  assert.ok(!seq.includes('soldiersClashed'));
+  assert.equal(game.getState(null).players.p1.soldiers[0].position, 0);
 });
