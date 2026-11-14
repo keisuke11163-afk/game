@@ -46,8 +46,6 @@ export const EVENT_TYPES = [
   'shieldAdded',
   'castleArmored',
   'armorExpired',
-  'trapSet',
-  'trapTriggered',
   'statusApplied',
   'statusCleared',
   'gameOver',
@@ -70,8 +68,10 @@ const RULE_KEYS = {
 /** rules.json の省略できる項目と、省略したときの値 */
 const OPTIONAL_RULES = {
   elementBonus: 0, // 属性が強いときに増えるダメージ
-  trapMaxPosition: 1, // トラップを置ける、自分の城から数えた位置の上限
-  drawPerCardUsed: 0, // 次のターンに引く枚数 = max(drawPerTurn, 使った枚数 × これ)
+  // 戦いで相手だけが消えたら、残りの歩数を進み続ける（false なら、そのターンはその場で止まる）
+  advanceAfterWin: false,
+  // 城に着いた兵士が与えるダメージ ＝ 攻撃力 × この値
+  soldierCastleDamageMultiplier: 1,
 };
 
 const ok = () => ({ ok: true });
@@ -95,7 +95,6 @@ export class Game {
 
     this.nextCardNumber = 1;
     this.nextSoldierNumber = 1;
-    this.nextTrapNumber = 1;
     /** @type {Map<string, Set<Function>>} */
     this.listeners = new Map(EVENT_TYPES.map((type) => [type, new Set()]));
 
@@ -106,7 +105,7 @@ export class Game {
     this.playerOrder.forEach((id, seat) => {
       // 2人用のボーナス。3人以上の席ごとのボーナスは STEP 5 で決める（seatCastleBonus）
       const bonus = this.playerOrder.length === 2 && seat === 1 ? this.rules.secondPlayerCastleBonus : 0;
-      this.players[id] = new Player(id, this.rules.castleMaxHp + bonus, this.rules.drawPerTurn);
+      this.players[id] = new Player(id, this.rules.castleMaxHp + bonus);
     });
     /** @type {Road[]} */
     this.roads = [];
@@ -137,15 +136,15 @@ export class Game {
 
   static validateRules(rules) {
     if (!rules || typeof rules !== 'object') throw new Error('rules.json の中身を渡してください');
-    for (const key of Object.keys(OPTIONAL_RULES)) {
-      const v = rules[key];
-      if (v !== undefined && (!Number.isInteger(v) || v < 0)) {
-        throw new Error(`rules.json の ${key} は 0 以上の整数にしてください（書かなければ ${OPTIONAL_RULES[key]}）`);
-      }
+    if (rules.elementBonus !== undefined && (!Number.isInteger(rules.elementBonus) || rules.elementBonus < 0)) {
+      throw new Error('rules.json の elementBonus は 0 以上の整数にしてください（書かなければ 0）');
     }
-    if (rules.trapMaxPosition !== undefined && Number.isInteger(rules.laneLength)
-      && rules.trapMaxPosition >= Math.floor(rules.laneLength / 2)) {
-      throw new Error('rules.json の trapMaxPosition は、真ん中のマスより手前（laneLength の半分より小さい）にしてください');
+    if (rules.advanceAfterWin !== undefined && typeof rules.advanceAfterWin !== 'boolean') {
+      throw new Error('rules.json の advanceAfterWin は true か false にしてください（書かなければ false）');
+    }
+    const m = rules.soldierCastleDamageMultiplier;
+    if (m !== undefined && (!Number.isInteger(m) || m < 1)) {
+      throw new Error('rules.json の soldierCastleDamageMultiplier は 1 以上の整数にしてください（書かなければ 1）');
     }
     for (const [key, min] of Object.entries(RULE_KEYS)) {
       const v = rules[key];
@@ -317,8 +316,8 @@ export class Game {
       this.emit('armorExpired', { playerId });
     }
 
-    // 1. ドロー（先攻の最初のターンだけ firstTurnDraw 枚。ほかは前のターンに決まった drawNextTurn 枚）
-    const drawCount = this.turn === 1 ? this.rules.firstTurnDraw : player.drawNextTurn;
+    // 1. ドロー（先攻の最初のターンだけ firstTurnDraw 枚。ほかは毎ターン drawPerTurn 枚に固定）
+    const drawCount = this.turn === 1 ? this.rules.firstTurnDraw : this.rules.drawPerTurn;
     this.drawCards(player, drawCount);
 
     // 2. 進軍
@@ -366,42 +365,40 @@ export class Game {
         continue;
       }
 
-      const from = soldier.position;
-      let opponent = this.findClashTarget(soldier, enemy);
-      let trap = null;
       let steps = 0;
-      while (!opponent && steps < soldier.speed) {
-        soldier.moveForward();
-        steps += 1;
-        if (soldier.hasReachedCastle(laneLength)) break;
-        trap = this.findTrap(soldier, player, enemy);
-        if (trap) break;
-        opponent = this.findClashTarget(soldier, enemy);
-      }
-
-      const reached = soldier.hasReachedCastle(laneLength);
-      if (steps > 0) {
-        // 城に着いた兵士は城の位置（laneLength）まで動いたことにする
-        this.emit('soldierMoved', {
-          playerId: player.id,
-          soldierId: soldier.soldierId,
-          roadId: road.roadId,
-          from,
-          to: reached ? laneLength : soldier.position,
-        });
-      }
-
-      if (trap) {
-        this.triggerTrap(enemy, trap, player, soldier);
-        continue;
-      }
-      if (opponent) {
+      let reached = false;
+      // advanceAfterWin のときは、戦って相手だけが消えたら、残りの歩数でもう一度進む
+      for (;;) {
+        const from = soldier.position;
+        let opponent = this.findClashTarget(soldier, enemy);
+        let moved = 0;
+        while (!opponent && steps < soldier.speed) {
+          soldier.moveForward();
+          steps += 1;
+          moved += 1;
+          if (soldier.hasReachedCastle(laneLength)) break;
+          opponent = this.findClashTarget(soldier, enemy);
+        }
+        reached = soldier.hasReachedCastle(laneLength);
+        if (moved > 0) {
+          // 城に着いた兵士は城の位置（laneLength）まで動いたことにする
+          this.emit('soldierMoved', {
+            playerId: player.id,
+            soldierId: soldier.soldierId,
+            roadId: road.roadId,
+            from,
+            to: reached ? laneLength : soldier.position,
+          });
+        }
+        if (!opponent) break;
         this.fight(player, soldier, enemy, opponent);
-        continue;
+        const keepGoing = this.rules.advanceAfterWin && opponent.isDead && !soldier.isDead && steps < soldier.speed;
+        if (!keepGoing) break;
       }
       if (!reached) continue;
 
-      this.damageCastle(enemy, soldier.attack, { kind: 'soldier', soldierId: soldier.soldierId });
+      const damage = soldier.attack * this.rules.soldierCastleDamageMultiplier;
+      this.damageCastle(enemy, damage, { kind: 'soldier', soldierId: soldier.soldierId });
       player.removeSoldier(soldier.soldierId);
       this.emit('soldierDestroyed', {
         playerId: player.id,
@@ -436,27 +433,6 @@ export class Game {
   removeSoldier(owner, soldier, reason) {
     owner.removeSoldier(soldier.soldierId);
     this.emit('soldierDestroyed', { playerId: owner.id, soldierId: soldier.soldierId, reason });
-  }
-
-  /** owner の兵士 soldier が今いるマスに、trapOwner のトラップがあれば返す */
-  findTrap(soldier, owner, trapOwner) {
-    const road = this.findRoad(soldier.roadId);
-    const square = road.toSquare(owner.id, soldier.position);
-    return trapOwner.traps.find((t) => t.roadId === road.roadId && t.square === square) || null;
-  }
-
-  triggerTrap(trapOwner, trap, victimOwner, soldier) {
-    trapOwner.traps = trapOwner.traps.filter((t) => t !== trap);
-    this.emit('trapTriggered', {
-      playerId: trapOwner.id,
-      trapId: trap.trapId,
-      type: trap.type,
-      soldierId: soldier.soldierId,
-      roadId: trap.roadId,
-      square: trap.square,
-    });
-    const def = this.cardDefs[trap.type];
-    if (def.effect === 'pit') this.damageSoldier(victimOwner, soldier, def.amount, 'trap');
   }
 
   /**
@@ -526,18 +502,6 @@ export class Game {
         // 同じ武器をもう一度持たせても何も起きないので、その兵士は対象にしない
         const targets = player.soldiers.filter((x) => x.weapon !== card.type).map((x) => ({ soldierId: x.soldierId }));
         return { targets, reason: player.soldiers.length ? 'もう同じ武器を持っています' : '道の上に自分の兵士がいません' };
-      }
-      case 'trap': {
-        const targets = [];
-        for (const road of this.roads.filter((r) => r.has(player.id))) {
-          for (let pos = 0; pos <= Math.min(this.rules.trapMaxPosition, this.rules.laneLength - 1); pos++) {
-            const square = road.toSquare(player.id, pos);
-            if (!player.traps.some((t) => t.roadId === road.roadId && t.square === square)) {
-              targets.push({ roadId: road.roadId, square });
-            }
-          }
-        }
-        return { targets, reason: 'トラップを置ける場所がありません' };
       }
       default:
         break;
@@ -656,10 +620,7 @@ export class Game {
     // 使ったカードは（兵士も）すぐ捨て札へ。使い切りのカードは、二度と山札に戻らない置き場へ
     if (card.isExhaust) this.exhaustedPile.push(card);
     else this.discardPile.push(card);
-    // トラップは種類を伏せる（相手に見えないように）
-    this.emit('cardPlayed', { playerId: player.id, cardId: card.cardId, type: card.kind === 'trap' ? null : card.type });
-    // 次のターンに引く枚数は、出すたびに決め直す（UI がターン中に表示できるように）
-    player.drawNextTurn = Math.max(this.rules.drawPerTurn, player.cardsPlayedThisTurn * this.rules.drawPerCardUsed);
+    this.emit('cardPlayed', { playerId: player.id, cardId: card.cardId, type: card.type });
 
     if (card.isSoldier) {
       const targetId = resolved.target.playerId;
@@ -757,11 +718,6 @@ export class Game {
       this.emit('castleArmored', { playerId: player.id, armor: player.armor });
       return;
     }
-    if (def.kind === 'trap') {
-      const trapId = `t${String(this.nextTrapNumber++).padStart(2, '0')}`;
-      player.traps.push({ trapId, roadId: target.roadId, square: target.square, type: card.type });
-      this.emit('trapSet', { playerId: player.id, trapId, roadId: target.roadId, square: target.square });
-    }
   }
 
   /** ターン終了。手札が上限を超えていたら phase "discard" にして、捨て終わるまで待つ */
@@ -806,8 +762,6 @@ export class Game {
 
   passTurn() {
     const player = this.players[this.currentPlayer];
-    // 次のターンに引く枚数 ＝ max(drawPerTurn, このターンに使った枚数 × drawPerCardUsed)
-    player.drawNextTurn = Math.max(this.rules.drawPerTurn, player.cardsPlayedThisTurn * this.rules.drawPerCardUsed);
     player.playedThisTurn = false;
     this.beginTurn(this.nextPlayerAfter(this.currentPlayer));
   }

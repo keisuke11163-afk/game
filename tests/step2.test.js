@@ -1,4 +1,4 @@
-// STEP 2（武器・防御・トラップ・属性・状態異常・ドロー）のテスト。
+// STEP 2（武器・防御・属性・状態異常・ドロー）のテスト。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game, EVENT_TYPES } from '../js/game/Game.js';
@@ -7,7 +7,7 @@ import { loadFixture, seededRng, recordEvents } from './helpers.js';
 // tests/fixtures/cards-step2.json（STEP 2 のカードを足した固定データ）と、rules は STEP 1 の固定データ＋STEP 2 の値
 function setup({ p1 = [], p2 = [], deck = Array(30).fill('heal'), rules = {} } = {}) {
   const cards = loadFixture('cards-step2.json');
-  const r = { ...loadFixture('rules.json'), elementBonus: 2, trapMaxPosition: 1, drawPerCardUsed: 1, ...rules };
+  const r = { ...loadFixture('rules.json'), elementBonus: 2, ...rules };
   const game = new Game({ cards, rules: r, rng: seededRng(1) });
   game.debugSetHand('p1', p1);
   game.debugSetHand('p2', p2);
@@ -25,15 +25,16 @@ const soldiers = (game, pid) => game.getState(null).players[pid].soldiers;
 const after = (log, i) => log.slice(i).map((e) => e.event);
 
 test('付加・防御は何枚でも出せる。メインは1ターン1枚', () => {
-  const { game } = setup({ p1: ['infantry', 'knight', 'wall', 'pit', 'pit'] });
+  const { game } = setup({ p1: ['infantry', 'knight', 'wall', 'shield', 'shield', 'flameSword'] });
   assert.equal(play(game, 'infantry').ok, true);
   assert.equal(play(game, 'knight').reason, 'このターンはもうメインのカードを出しました');
   assert.equal(play(game, 'wall').ok, true);
-  assert.equal(play(game, 'pit', { roadId: 'p1-p2', square: 0 }).ok, true);
-  assert.equal(play(game, 'pit', { roadId: 'p1-p2', square: 1 }).ok, true);
+  assert.equal(play(game, 'shield').ok, true);
+  assert.equal(play(game, 'shield').ok, true);
+  assert.equal(play(game, 'flameSword').ok, true);
   const me = game.getState('p1').players.p1;
   assert.equal(me.playedThisTurn, true);
-  assert.equal(me.cardsPlayedThisTurn, 4);
+  assert.equal(me.cardsPlayedThisTurn, 5);
 });
 
 test('付加・防御も、何も起きないときは出せない（理由つき）', () => {
@@ -44,20 +45,17 @@ test('付加・防御も、何も起きないときは出せない（理由つ�
   assert.equal(game.canPlayCard(idOf(game, 'frostBreath')).reason, '道の上に相手の兵士がいません');
 });
 
-test('ドロー：次のターンは max(drawPerTurn, 使った枚数)。0枚でも drawPerTurn', () => {
-  const { game, log } = setup({ p1: ['infantry', 'wall', 'pit'], p2: [] });
+test('ドロー：使った枚数によらず、毎ターン drawPerTurn 枚', () => {
+  const { game, log } = setup({ p1: ['infantry', 'wall', 'shield'], p2: [] });
   play(game, 'infantry');
   play(game, 'wall');
-  play(game, 'pit', { roadId: 'p1-p2', square: 0 });
-  assert.equal(game.getState('p1').players.p1.drawNextTurn, 3); // 出すたびに決め直す
+  play(game, 'shield');
   game.endTurn();
-  assert.equal(game.getState('p1').players.p1.drawNextTurn, 3);
   game.endTurn(); // p2 は何も出さない
-  assert.equal(game.getState('p2').players.p2.drawNextTurn, 1);
   const draws = log.filter((e) => e.event === 'cardDrawn').map((e) => [e.playerId, e.cardIds.length]);
-  assert.deepEqual(draws, [['p1', 1], ['p2', 1], ['p1', 3]]);
+  assert.deepEqual(draws, [['p1', 1], ['p2', 1], ['p1', 1]]);
+  assert.equal(game.getState('p1').players.p1.drawNextTurn, undefined);
 });
-
 test('武器：攻撃力が上がり属性がつく。1体に1つ（持ちかえ）', () => {
   const { game, log } = setup({ p1: ['infantry', 'flameSword', 'waterSpear'] });
   play(game, 'infantry');
@@ -117,36 +115,6 @@ test('城壁が残っていたら、ターンの始め（turnStarted のあと�
   assert.equal(game.getState('p1').players.p1.armor, 0);
 });
 
-test('トラップ：自分の側だけ・1マスに1つ。相手には種類が見えない', () => {
-  const { game, log } = setup({ p1: ['pit', 'pit', 'pit'] });
-  const id = idOf(game, 'pit');
-  assert.deepEqual(game.getTargets(id), [{ roadId: 'p1-p2', square: 0 }, { roadId: 'p1-p2', square: 1 }]);
-  assert.equal(game.canPlayCard(id, { roadId: 'p1-p2', square: 3 }).reason, 'そこには出せません');
-  play(game, 'pit', { roadId: 'p1-p2', square: 1 });
-  assert.deepEqual(log.at(-1), { event: 'trapSet', playerId: 'p1', trapId: 't01', roadId: 'p1-p2', square: 1 });
-  assert.deepEqual(game.getTargets(idOf(game, 'pit')), [{ roadId: 'p1-p2', square: 0 }]);
-  assert.equal(game.getState('p1').players.p1.traps[0].type, 'pit');
-  assert.equal(game.getState('p2').players.p1.traps[0].type, null);
-  assert.equal(game.getState(null).players.p1.traps[0].square, 1);
-});
-
-test('トラップ：相手の兵士が進軍で入ったら発動して止まる（soldierMoved → trapTriggered → soldierDamaged）', () => {
-  const { game, log } = setup({ p1: ['pit'], p2: ['infantry'] });
-  play(game, 'pit', { roadId: 'p1-p2', square: 2 - 1 }); // 道のマス1
-  game.endTurn();
-  play(game, 'infantry'); // 道のマス4
-  game.endTurn(); game.endTurn(); // p2 歩兵：4→2
-  game.endTurn(); game.endTurn(); // p2 歩兵：2→1 で落とし穴
-  const i = log.findIndex((e) => e.event === 'trapTriggered');
-  assert.deepEqual(after(log, i - 1).slice(0, 3), ['soldierMoved', 'trapTriggered', 'soldierDamaged']);
-  assert.equal(log[i - 1].to, 3); // p2 から数えて3 = 道のマス1
-  assert.equal(log[i].type, 'pit');
-  assert.equal(log[i + 1].cause, 'trap');
-  assert.equal(log[i + 1].hp, 2);
-  assert.equal(soldiers(game, 'p2')[0].position, 3);
-  assert.equal(game.getState(null).players.p1.traps.length, 0);
-});
-
 test('毒：持ち主の進軍の前にダメージ。回数が終わったら statusCleared。重ねがけで増えない', () => {
   const { game, log } = setup({ p1: ['infantry'], p2: ['poisonMist', 'poisonMist'] });
   play(game, 'infantry');
@@ -200,16 +168,9 @@ test('cards.json の間違いは例外', () => {
   const rules = loadFixture('rules.json');
   assert.throws(() => new Game({ cards: { ...cards, x: { name: 'x', kind: 'weapon', count: 1 } }, rules }), /attackBonus/);
   assert.throws(() => new Game({ cards: { ...cards, x: { name: 'x', kind: 'weapon', attackBonus: 1, element: 'ice', count: 1 } }, rules }), /element/);
-  assert.throws(() => new Game({ cards: { ...cards, x: { name: 'x', kind: 'trap', effect: 'boom', count: 1 } }, rules }), /effect/);
+  assert.throws(() => new Game({ cards: { ...cards, x: { name: 'x', kind: 'defense', effect: 'boom', count: 1 } }, rules }), /effect/);
+  assert.throws(() => new Game({ cards: { ...cards, x: { name: 'x', kind: 'trap', effect: 'pit', amount: 3, count: 1 } }, rules }), /kind/);
   assert.throws(() => new Game({ cards, rules: { ...rules, elementBonus: -1 } }), /elementBonus/);
-});
-
-test('トラップを出したときの cardPlayed は type が null（相手に種類が見えない）', () => {
-  const { game, log } = setup({ p1: ['pit'] });
-  play(game, 'pit', { roadId: 'p1-p2', square: 0 });
-  const played = log.find((e) => e.event === 'cardPlayed');
-  assert.equal(played.type, null);
-  assert.ok(!JSON.stringify(log.filter((e) => e.event !== 'trapTriggered')).includes('"pit"'));
 });
 
 test('同じ武器をもう一度は持たせられない。全員もう凍結していたら氷の息は出せない', () => {
@@ -224,35 +185,18 @@ test('同じ武器をもう一度は持たせられない。全員もう凍結�
   assert.equal(game.canPlayCard(idOf(game, 'frostBreath')).ok, true);
 });
 
-test('トラップは戦いより先：すぐ先に相手がいても、落とし穴で止まって戦わない', () => {
-  const { game, log } = setup({ p1: ['pit', 'infantry'], p2: ['knight'] });
-  play(game, 'pit', { roadId: 'p1-p2', square: 1 });
-  game.endTurn();
-  play(game, 'knight'); // 道のマス4
-  game.endTurn();
-  play(game, 'infantry'); // 道のマス0
-  game.endTurn(); // 騎士：4→3→2→1（落とし穴）。マス0の歩兵は1つ先だが、トラップが先
-  const i = log.findIndex((e) => e.event === 'trapTriggered');
-  assert.ok(i > 0);
-  assert.ok(!log.slice(i, i + 4).some((e) => e.event === 'soldiersClashed'));
-});
-
-test('落とし穴で HP が0になったら消える。毒の最後の1回で消えるときは statusCleared を出さない', () => {
-  const { game, log } = setup({ p1: ['pit', 'pit'], p2: ['knight', 'thunder'], rules: {} });
-  play(game, 'pit', { roadId: 'p1-p2', square: 1 });
+test('毒の最後の1回で消えるときは statusCleared を出さない', () => {
+  const { game, log } = setup({ p2: ['knight'] });
   game.endTurn();
   play(game, 'knight');
-  game.endTurn(); game.endTurn(); // 騎士 0→3 = 道のマス1 で落とし穴（HP4 → 1）
-  const dmg = log.find((e) => e.event === 'soldierDamaged' && e.cause === 'trap');
-  assert.equal(dmg.hp, 1);
-  // 毒：HP1 の兵士に毒 → 次の進軍の前に消える。statusCleared は出ない
+  game.endTurn();
+  game.players.p2.soldiers[0].hp = 1;
   game.players.p2.soldiers[0].poison = { amount: 1, turns: 1 };
-  game.endTurn(); game.endTurn();
+  game.endTurn(); // p2 のターン：毒で消える
   const k = log.findLastIndex((e) => e.event === 'soldierDestroyed');
   assert.equal(log[k - 1].cause, 'poison');
   assert.ok(!log.some((e) => e.event === 'statusCleared'));
 });
-
 test('属性：火は木に強く、木は水に強い。城へのダメージには属性が乗らない', () => {
   const { game } = setup();
   const fire = { attack: 3, element: 'fire' };
@@ -264,9 +208,8 @@ test('属性：火は木に強く、木は水に強い。城へのダメージ�
   assert.equal(game.fightDamage(fire, { attack: 3, element: null }), 3);
 });
 
-test('rules / cards の間違い：trapMaxPosition が真ん中以上、兵士に element', () => {
+test('cards の間違い：兵士に element', () => {
   const cards = loadFixture('cards-step2.json');
   const rules = loadFixture('rules.json');
-  assert.throws(() => new Game({ cards, rules: { ...rules, trapMaxPosition: 2 } }), /trapMaxPosition/);
   assert.throws(() => new Game({ cards: { ...cards, infantry: { ...cards.infantry, element: 'fire' } }, rules }), /element/);
 });
