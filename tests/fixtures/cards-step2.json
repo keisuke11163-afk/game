@@ -73,13 +73,6 @@
     "count": 3,
     "exhaust": true
   },
-  "pit": {
-    "name": "落とし穴",
-    "kind": "trap",
-    "effect": "pit",
-    "amount": 3,
-    "count": 3
-  },
   "poisonMist": {
     "name": "毒の霧",
     "kind": "spell",
