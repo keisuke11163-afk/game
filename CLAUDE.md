@@ -147,6 +147,9 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 - カード種類（type）：`cards.json` のキー。例：`"infantry"`
 - カードID（cardId）：山札の1枚1枚につく一意のID。例：`"c07"`。同じ種類のカードでもIDは別
 - 兵士ID（soldierId）：場に出た兵士につく一意のID。例：`"s03"`
+- カードIDは山札をシャッフルしたあとの順に振る。IDから種類は分からない
+- 道ID（roadId）：道のID。2人のときは2人のIDを席順で `-` でつなぐ（3人以上の道の形は STEP 5 で決める）。例：`"p1-p2"`。2人なら道は `"p1-p2"` の1本だけ
+- 対象（target）：カードを出す先。今は `{ playerId }` だけ（兵士は送り込む相手、ファイアボール・サンダーは攻める相手、ヒールは自分）。STEP 2 以降で `{ soldierId }` などが増える（「全体の設計」の「対象の選び方」）
 
 ### UIから呼ぶもの
 
@@ -155,8 +158,9 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 | `new Game({ cards, rules, rng })` | ゲームを作る。`cards` / `rules` は `data/` の JSON の中身（Game はファイルを読まない）。`rng` は 0以上1未満を返す乱数で、省略すると `Math.random`。作った時点で初期手札は配られていて、`phase` は `"ready"`。イベントは出さない |
 | `game.start()` | ゲームを始める。全イベントを `on()` で購読してから呼ぶと、p1 のターン1が始まる（`turnStarted` → ドロー → 進軍） |
 | `game.getState(viewerId)` | 今の状態をただのオブジェクトで返す。`viewerId` の手札は中身まで、相手の手札は枚数だけ入る |
-| `game.canPlayCard(cardId)` | そのカードを今出せるかを返す（読むだけで、状態は変わらない）。出せないときは `{ ok: false, reason }`。`playCard` と同じ判定なので、UIは出せない理由を前もって表示できる |
-| `game.playCard(cardId, target)` | カードを使う。STEP 1 では対象が自動で決まるので `target` は省略してよい（将来の魔物や対象選択のために残す） |
+| `game.canPlayCard(cardId, target)` | そのカードを今出せるかを返す（読むだけで、状態は変わらない）。出せないときは `{ ok: false, reason }`。`playCard` と同じ判定なので、UIは出せない理由を前もって表示できる。`target` を省略して、対象が2つ以上あるときは `{ ok: true, needsTarget: true }` |
+| `game.getTargets(cardId)` | そのカードを今出せる対象の一覧（読むだけ）。出せないときは空の配列。対象の形は下の「対象」 |
+| `game.playCard(cardId, target)` | カードを使う。対象が1つしかないときは `target` を省略してよい（2人なら今のカードはすべて省略できる）。対象が2つ以上あるのに省略すると `{ ok: false, reason: "対象を選んでください", needsTarget: true }` |
 | `game.discard(cardIds)` | 手札を捨てる。`phase` が `"discard"` のときだけ使える。捨てる必要がある枚数ちょうどを1回で渡す（多い・少ない・重複・手札にないカードは `{ ok: false }`）。捨て終わったら、自動で次の人のターンが始まる（`endTurn()` を呼び直さない） |
 | `game.endTurn()` | ターンを終える。手札が上限を超えていたら `phase` が `"discard"` になり、捨て終わるまで次の人の番にならない |
 | `game.on(type, handler)` / `game.off(type, handler)` | イベントの購読と解除。`handler` はペイロードのオブジェクトを1つ受け取る。表にない `type` を渡すと `{ ok: false }` |
@@ -182,6 +186,8 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 
 ```js
 {
+  playerOrder: ["p1", "p2"],   // 席順（手番の順）
+  roads: [{ roadId: "p1-p2", players: ["p1", "p2"], length: 3 }],  // 道。length はいつも laneLength
   turn: 3,                     // 通算ターン数（1から）
   currentPlayer: "p1",
   phase: "main",               // "ready"（start() の前）| "main" | "discard" | "gameOver"
@@ -191,12 +197,13 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
   exhaustedCount: 1,           // 使い切り置き場の枚数（使い切りのカードを使うとここへ行き、山札に戻らない）
   players: {
     p1: {
-      castleHp: 22,
-      castleMaxHp: 25,         // その城の上限。後攻（p2）は castleMaxHp + secondPlayerCastleBonus
+      castleHp: 32,
+      castleMaxHp: 40,         // その城の上限。後攻（p2）は castleMaxHp + secondPlayerCastleBonus
       hand: [{ cardId: "c07", type: "infantry" }],  // viewer 本人のみ。相手は null
       handCount: 7,
       playedThisTurn: false,
-      soldiers: [{ soldierId: "s03", type: "knight", hp: 4, attack: 5, position: 3 }]
+      eliminated: false,       // 負けて抜けたか（3人以上のときに使う。2人ならいつも false）
+      soldiers: [{ soldierId: "s03", type: "knight", hp: 4, attack: 5, position: 3, roadId: "p1-p2", targetId: "p2" }]
     },
     p2: { /* 同じ形 */ }
   }
@@ -206,9 +213,10 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 - `getState(null)` のように、どちらのプレイヤーIDでもない値を渡すと、両方の `hand` が `null` になる（手番交代の目隠し中などに使う）
 - `turn` は `start()` の前は 0
 - `position` は「自分の城から数えたマス」（0 = 自分の城の前、`laneLength - 1` = 相手の城の前）
-- 道は1本なので、画面で同じ道の上に置くときは「道のマス番号」（p1 の城側を 0 とする）に直す
-  - p1 の兵士：道のマス番号 = `position`
-  - p2 の兵士：道のマス番号 = `laneLength - 1 - position`
+- 画面で道の上に置くときは「道のマス番号」（その道の `players[0]` の城側を 0 とする。2人なら p1 の城側）に直す
+  - 道の `players[0]` の兵士：道のマス番号 = `position`
+  - 道の `players[1]` の兵士：道のマス番号 = `laneLength - 1 - position`
+- 兵士の `targetId` は、その兵士が向かっている相手（道の向こうの人）
 - STEP 3 で魔物を作るときに `monster`（真ん中のマスにいる魔物の情報。いなければ `null`）を追加する
 
 ### Gameが出すイベント
@@ -223,12 +231,12 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `cardPlayed` | `{ playerId, cardId, type }` |
 | `discardRequired` | `{ playerId, count }` … 捨てる必要がある枚数 |
 | `cardDiscarded` | `{ playerId, cardIds }` |
-| `soldierDeployed` | `{ playerId, soldierId, type, position, hp, attack }` … `hp` / `attack` は出した時点の値 |
-| `soldierMoved` | `{ playerId, soldierId, from, to }` |
-| `soldiersClashed` | `{ attacker: { playerId, soldierId }, defender: { playerId, soldierId }, square }` … 道の上で兵士同士がぶつかった。`attacker` は進軍中の側。`square` は**攻める側が止まったマス**の道のマス番号（1マス先の相手と戦うときも攻める側のマス） |
+| `soldierDeployed` | `{ playerId, soldierId, type, roadId, targetId, position, hp, attack }` … `hp` / `attack` は出した時点の値 |
+| `soldierMoved` | `{ playerId, soldierId, roadId, from, to }` |
+| `soldiersClashed` | `{ attacker: { playerId, soldierId }, defender: { playerId, soldierId }, roadId, square }` … 道の上で兵士同士がぶつかった。`attacker` は進軍中の側。`square` は**攻める側が止まったマス**の道のマス番号（1マス先の相手と戦うときも攻める側のマス） |
 | `soldierDamaged` | `{ playerId, soldierId, amount, hp }` |
 | `soldierDestroyed` | `{ playerId, soldierId, reason }` … `reason` は `"killed"` か `"reachedCastle"` |
-| `spellCast` | `{ playerId, type, target }` … `target` は効果を受けるプレイヤーID（ファイアボール・サンダーは相手、ヒールは自分） |
+| `spellCast` | `{ playerId, type, target }` … `target` は効果を受けるプレイヤーIDの**文字列**（`playCard` に渡す `target` のオブジェクトとは形が違う）（ファイアボール・サンダーは相手、ヒールは自分） |
 | `castleDamaged` | `{ playerId, amount, hp, source }` … `playerId` は城の持ち主。`amount` は与えたダメージ（兵士は攻撃力 × `soldierCastleDamageMultiplier`、魔法は値そのまま）（`hp` は0未満にならない）。`source` は `{ kind: "soldier", soldierId }` か `{ kind: "spell", type }` |
 | `castleHealed` | `{ playerId, amount, hp }` … `amount` は実際に増えた量（上限で止まったぶんは含まない） |
 | `gameOver` | `{ winner }` |
@@ -359,7 +367,7 @@ STEP 2 以降で作り直しにならないよう、Game をどう広げるか�
 **3人以上のルールは、まだ決めていない。** 下の「3人以上のルールの案（STEP 5 で遊んでから決める）」に案として書き、STEP 5 で実際に遊んでから決める。今決めて作るのは、2人の遊び方を変えない土台（席順・`opponentsOf`・対象の選び方・カードID）だけ。
 
 ### 2人専用の前提をなくす
-今の Game には「2人」が決め打ちされている所がある。これを次のように直す。
+今の Game には「2人」が決め打ちされている所がある。これを次のように直す。**席順・道・`roadId` / `targetId`・`getTargets`・カードIDの振り方は、もう入った**（「ロジックとUIの約束」に書いた）。人数を変える `rules.playerCount` と、負けた人の扱いは STEP 5 で入る。
 
 | 今 | 直したあと |
 |---|---|
@@ -412,10 +420,11 @@ STEP 2 以降で作り直しにならないよう、Game をどう広げるか�
 - 魔物が城を落としたときの扱い（2人のときは落とされた方の負け）
 - 負けた人が出たときの、その人の道と兵士の扱い
 - 3人以上のときの席ごとの城ボーナス
+- ファイアボール（すぐ効く・防げない）が誰にでも撃てると、いちばん弱い城に集まりやすい。対象を絞るかは、シミュレーションして決める
 
-### 対象の選び方（STEP 2 から）
+### 対象の選び方（済）
 - `game.getTargets(cardId)` を足す：そのカードを今出せる対象の一覧を返す（読むだけ。出せないときは空の配列）。UIはこれでタップできる場所を光らせる。対象が1つだけなら `target` を省略してよい
-- `target` の形は4つ
+- `target` の形は4つ。キーと値がちょうど一致するものだけ受け付ける（値が `undefined` のキーは無いものとみなす）。違うときは `{ ok: false, reason: "そこには出せません" }`
   - プレイヤー：`{ playerId: "p2" }`（城への魔法・回復・兵士を送る相手）
   - 兵士：`{ soldierId: "s03" }`（武器・盾など、兵士につけるカード）
   - 道のマス：`{ roadId: "p1-p2", square: 1 }`（トラップなど）
@@ -439,8 +448,8 @@ STEP 2 以降で作り直しにならないよう、Game をどう広げるか�
 - `getState().players.pX.playedThisTurn` は「このターンにメインのカードを出したか」の意味のまま残す。ほかに `cardsPlayedThisTurn`（出した枚数）と `drawNextTurn`（次のターンに引く枚数）を足す
 - 「使った枚数ぶん、次のターンに追加で引く」は STEP 2 で数値を決める（手札が増えすぎないように）
 
-### カードID
-- **カードIDから種類が分からないようにする。** 今は種類の順にIDを振ってからシャッフルしているので、IDを見ると種類が推測できる（`c01`〜`c10` が歩兵など）。シャッフルしたあとの順にIDを振るように直す（全体の設計の実装PRで直す）
+### カードID（済）
+- カードIDはシャッフルしたあとの順に振る（IDから種類が分からないように）。ただし捨て札から山札を作り直すときは同じIDのまま戻るので、一度見たカードはIDで分かる。オンライン（STEP 4）では、相手の `cardDrawn` に `cardIds` を見せない
 
 ### 魔物（STEP 3）
 - 2人なら道は1本で、魔物は真ん中のマスに1体まで（3人以上は、上の案のとおり広場に1体。STEP 5 で決める）

@@ -7,7 +7,12 @@
 //
 // 流れ:
 //   new Game() … phase "ready"。初期手札を配った状態（イベントは出ない）
-//   start()    … p1 のターン1を始める（turnStarted → 進軍）
+//   start()    … p1 のターン1を始める（turnStarted → ドロー → 進軍）
+//
+// 何人でも扱えるように作っている（CLAUDE.md「全体の設計」）。
+//   - 席順は this.playerOrder。手番はこの順
+//   - 道（Road）は、となりの席どうしをつなぐ。2人なら1本
+//   - 兵士は roadId（どの道か）と targetId（道の向こうの人）を持つ
 //   playCard() … メインでカードを1枚使う（使わなくてもよい）
 //   endTurn()  … 手札が上限を超えていたら phase "discard" → discard() で捨てる
 //                超えていなければ（または捨て終わったら）次の人のターンが始まる
@@ -16,7 +21,9 @@
 import { Card } from './Card.js';
 import { Soldier } from './Soldier.js';
 import { Player } from './Player.js';
+import { Road } from './Road.js';
 
+/** 2人のときのプレイヤーID（人数を変えられるようになるまでは、いつもこの2人） */
 export const PLAYER_IDS = ['p1', 'p2'];
 
 /** Game が出すイベントの名前（CLAUDE.md「Gameが出すイベント」の表と同じ） */
@@ -81,27 +88,34 @@ export class Game {
     /** @type {Map<string, Set<Function>>} */
     this.listeners = new Map(EVENT_TYPES.map((type) => [type, new Set()]));
 
+    /** 席順（手番の順） */
+    this.playerOrder = [...PLAYER_IDS];
     this.players = {};
     // 後攻（p2）は城HPが secondPlayerCastleBonus だけ多い状態で始まる（上限も同じだけ高い）。先攻有利をやわらげるため
-    for (const id of PLAYER_IDS) {
-      const bonus = id === PLAYER_IDS[1] ? this.rules.secondPlayerCastleBonus : 0;
+    this.playerOrder.forEach((id, seat) => {
+      // 2人用のボーナス。3人以上の席ごとのボーナスは STEP 5 で決める（seatCastleBonus）
+      const bonus = this.playerOrder.length === 2 && seat === 1 ? this.rules.secondPlayerCastleBonus : 0;
       this.players[id] = new Player(id, this.rules.castleMaxHp + bonus);
-    }
+    });
+    /** @type {Road[]} */
+    this.roads = [];
+    this.rebuildRoads();
 
     /** 山札。先頭（index 0）から引く */
-    this.deck = this.shuffle(this.buildDeck());
+    // カードIDはシャッフルしたあとの順に振る（IDから種類が分からないように）
+    this.deck = this.shuffle(this.buildDeckTypes()).map((type) => this.createCard(type));
     this.discardPile = [];
     /** 使い切りのカード（cards.json で exhaust: true）は、使ったらここへ行き、山札には戻らない */
     this.exhaustedPile = [];
 
     this.turn = 0;
-    this.currentPlayer = PLAYER_IDS[0];
+    this.currentPlayer = this.playerOrder[0];
     this.phase = 'ready';
     this.winner = null;
     this.discardCount = 0; // phase "discard" のときに捨てる必要がある枚数
 
     // 初期手札（ゲーム開始前なのでイベントは出さない）
-    for (const id of PLAYER_IDS) {
+    for (const id of this.playerOrder) {
       for (let i = 0; i < this.rules.initialHand; i++) {
         const card = this.deck.shift();
         if (!card) break;
@@ -162,12 +176,13 @@ export class Game {
     return new Card(cardId, type, this.cardDefs[type]);
   }
 
-  buildDeck() {
-    const deck = [];
+  /** 山札に入るカード種類の並び（count 枚ずつ） */
+  buildDeckTypes() {
+    const types = [];
     for (const [type, def] of Object.entries(this.cardDefs)) {
-      for (let i = 0; i < def.count; i++) deck.push(this.createCard(type));
+      for (let i = 0; i < def.count; i++) types.push(type);
     }
-    return deck;
+    return types;
   }
 
   /** Fisher-Yates シャッフル（rng を使うので、rng を固定すれば順番も固定できる） */
@@ -196,16 +211,79 @@ export class Game {
     if (cardIds.length > 0) this.emit('cardDrawn', { playerId: player.id, cardIds });
   }
 
-  // ================= ターン進行 =================
+  // ================= 席と道 =================
 
-  opponentOf(playerId) {
-    return this.players[playerId === 'p1' ? 'p2' : 'p1'];
+  /** まだ負けていないプレイヤーのID（席順） */
+  alivePlayerIds() {
+    return this.playerOrder.filter((id) => !this.players[id].eliminated);
   }
 
-  /** ゲームを始める（p1 のターン1）。UI が on() で購読してから呼ぶ */
+  /** playerId から見た、まだ負けていない相手全員（席順） */
+  opponentsOf(playerId) {
+    return this.alivePlayerIds().filter((id) => id !== playerId).map((id) => this.players[id]);
+  }
+
+  /** playerId と道でつながっている相手（となりの席） */
+  neighborsOf(playerId) {
+    return this.roads.filter((r) => r.has(playerId)).map((r) => this.players[r.otherSide(playerId)]);
+  }
+
+  /** 2人の間の道（なければ null） */
+  roadBetween(a, b) {
+    return this.roads.find((r) => r.has(a) && r.has(b)) || null;
+  }
+
+  findRoad(roadId) {
+    return this.roads.find((r) => r.roadId === roadId) || null;
+  }
+
+  /**
+   * まだ負けていない人を輪にならべ、となりどうしを道でつなぐ。2人なら1本。今ある道はそのまま残す。
+   * 負けた人が出たときの呼び出し（なくなった道の兵士を消す処理を含む）は STEP 5 で入れる。今は new Game() からだけ呼ぶ。
+   * @returns {{opened: Road[], closed: Road[]}}
+   */
+  rebuildRoads() {
+    const alive = this.alivePlayerIds();
+    const pairs = [];
+    if (alive.length === 2) pairs.push([alive[0], alive[1]]);
+    else if (alive.length > 2) {
+      for (let i = 0; i < alive.length; i++) {
+        const a = alive[i];
+        const b = alive[(i + 1) % alive.length];
+        // 道のIDは席順が前の人を先に
+        pairs.push(this.playerOrder.indexOf(a) < this.playerOrder.indexOf(b) ? [a, b] : [b, a]);
+      }
+    }
+    const opened = [];
+    const next = pairs.map(([a, b]) => {
+      const existing = this.roads.find((r) => r.players[0] === a && r.players[1] === b);
+      if (existing) return existing;
+      const road = new Road(a, b, this.rules.laneLength);
+      opened.push(road);
+      return road;
+    });
+    const closed = this.roads.filter((r) => !next.includes(r));
+    this.roads = next;
+    return { opened, closed };
+  }
+
+  /** 席順で次の手番の人（負けた人は飛ばす） */
+  nextPlayerAfter(playerId) {
+    const n = this.playerOrder.length;
+    const start = this.playerOrder.indexOf(playerId);
+    for (let i = 1; i <= n; i++) {
+      const id = this.playerOrder[(start + i) % n];
+      if (!this.players[id].eliminated) return id;
+    }
+    return playerId;
+  }
+
+  // ================= ターン進行 =================
+
+  /** ゲームを始める（席順の最初の人のターン1）。UI が on() で購読してから呼ぶ */
   start() {
     if (this.phase !== 'ready') return fail('ゲームはもう始まっています');
-    this.beginTurn(PLAYER_IDS[0]);
+    this.beginTurn(this.playerOrder[0]);
     return ok();
   }
 
@@ -233,11 +311,12 @@ export class Game {
    * 城に着いたら 移動 → 城にダメージ → 消える。城が落ちたらその場でゲームを止める。
    */
   advanceSoldiers(player) {
-    const enemy = this.opponentOf(player.id);
     const { laneLength } = this.rules;
 
     for (const soldier of [...player.soldiers]) {
       if (!player.soldiers.includes(soldier)) continue; // 念のため（自分の番に自分の兵士が先に消えることはない）
+      const enemy = this.players[soldier.targetId];
+      const road = this.findRoad(soldier.roadId);
 
       let steps = 0;
       let reached = false;
@@ -259,6 +338,7 @@ export class Game {
           this.emit('soldierMoved', {
             playerId: player.id,
             soldierId: soldier.soldierId,
+            roadId: road.roadId,
             from,
             to: reached ? laneLength : soldier.position,
           });
@@ -290,13 +370,8 @@ export class Game {
     }
   }
 
-  /** 自分から数えた位置 → 道のマス番号（p1 の城側が 0） */
-  toSquare(playerId, position) {
-    return playerId === PLAYER_IDS[0] ? position : this.rules.laneLength - 1 - position;
-  }
-
   /**
-   * soldier の「同じマスか1つ先のマス」にいる相手の兵士のうち、先に出された1体（いなければ null）。
+   * soldier の「同じマスか1つ先のマス」にいる相手の兵士（同じ道の上だけ）のうち、先に出された1体（いなければ null）。
    * enemy.soldiers は出した順に並んでいるので、最初に見つかったものが先に出された兵士。
    */
   findClashTarget(soldier, enemy) {
@@ -304,6 +379,7 @@ export class Game {
     const here = soldier.position;
     return (
       enemy.soldiers.find((e) => {
+        if (e.roadId !== soldier.roadId) return false;
         const q = laneLength - 1 - e.position; // 相手の兵士の位置を、soldier から数えた位置に直す
         return q === here || q === here + 1;
       }) || null
@@ -312,10 +388,12 @@ export class Game {
 
   /** 進軍中の attacker と、相手の defender が戦う。お互いに攻撃力ぶんのダメージを同時に与える */
   fight(player, attacker, enemy, defender) {
+    const road = this.findRoad(attacker.roadId);
     this.emit('soldiersClashed', {
       attacker: { playerId: player.id, soldierId: attacker.soldierId },
       defender: { playerId: enemy.id, soldierId: defender.soldierId },
-      square: this.toSquare(player.id, attacker.position), // 攻める側が止まったマス
+      roadId: road.roadId,
+      square: road.toSquare(player.id, attacker.position), // 攻める側が止まったマス
     });
 
     const toDefender = attacker.attack;
@@ -343,11 +421,37 @@ export class Game {
     }
   }
 
+  // ================= カードを出す =================
+
   /**
-   * そのカードを今出せるか。出せないときは理由を返す（UIが前もって表示するため）
-   * @returns {{ok: true} | {ok: false, reason: string}}
+   * そのカードを出せる対象の一覧（プレイヤーの番・手札にあるかなどは見ない）。
+   * 形は { playerId } / { soldierId } / { roadId, square } のどれか（CLAUDE.md「対象の選び方」）。
+   * @returns {{targets: object[], reason: string}} 対象がないときの理由も返す
    */
-  canPlayCard(cardId) {
+  listTargets(player, card) {
+    if (card.isSoldier) {
+      return {
+        targets: this.neighborsOf(player.id).map((p) => ({ playerId: p.id })),
+        reason: '兵士を送れる相手がいません',
+      };
+    }
+    switch (card.def.effect) {
+      case 'damageEnemyCastle':
+        return { targets: this.opponentsOf(player.id).map((p) => ({ playerId: p.id })), reason: '相手がいません' };
+      case 'damageEnemySoldiers':
+        return {
+          targets: this.opponentsOf(player.id).filter((p) => p.soldiers.length > 0).map((p) => ({ playerId: p.id })),
+          reason: '道の上に相手の兵士がいません',
+        };
+      case 'healOwnCastle':
+        return { targets: player.castle.isFull ? [] : [{ playerId: player.id }], reason: '城のHPが満タンです' };
+      default:
+        return { targets: [], reason: 'このカードは出せません' };
+    }
+  }
+
+  /** 手番・手札・枚数の決まりを確かめる。出せるならカードを返す */
+  checkPlayable(cardId) {
     if (this.phase === 'ready') return fail('ゲームがまだ始まっていません');
     if (this.phase === 'gameOver') return fail('ゲームは終わっています');
     if (this.phase === 'discard') return fail('手札を捨てているところです');
@@ -355,33 +459,68 @@ export class Game {
     const player = this.players[this.currentPlayer];
     const card = player.findInHand(cardId);
     if (!card) {
-      if (this.opponentOf(player.id).findInHand(cardId)) return fail('あなたの番ではありません');
+      if (this.opponentsOf(player.id).some((p) => p.findInHand(cardId))) return fail('あなたの番ではありません');
       return fail('そのカードは手札にありません');
     }
     if (player.playedThisTurn) return fail('このターンはもうカードを出しました');
+    return { ok: true, player, card };
+  }
 
-    if (card.isSpell) {
-      const enemy = this.opponentOf(player.id);
-      if (card.def.effect === 'damageEnemySoldiers' && enemy.soldiers.length === 0) {
-        return fail('道の上に相手の兵士がいません');
-      }
-      if (card.def.effect === 'healOwnCastle' && player.castle.isFull) {
-        return fail('城のHPが満タンです');
-      }
+  /**
+   * 対象を決める。target を省略して、対象が1つならそれを使う。
+   * @returns {{ok: true, target: object, needsTarget?: boolean} | {ok: false, reason: string}}
+   */
+  resolveTarget(player, card, target) {
+    const { targets, reason } = this.listTargets(player, card);
+    if (targets.length === 0) return fail(reason);
+    if (target === undefined || target === null) {
+      if (targets.length === 1) return { ok: true, target: targets[0] };
+      return { ok: true, target: null, needsTarget: true };
     }
-    return ok();
+    // 値が undefined のキーは無いものとして比べる（UI がオブジェクトを組み立てて渡しても困らないように）
+    const keys = (o) => Object.keys(o).filter((k) => o[k] !== undefined);
+    const same = (a, b) => keys(a).length === keys(b).length && keys(b).every((k) => a[k] === b[k]);
+    const found = typeof target === 'object' ? targets.find((t) => same(t, target)) : null;
+    if (!found) return fail('そこには出せません');
+    return { ok: true, target: found };
+  }
+
+  /**
+   * そのカードを今出せるか（読むだけ）。出せないときは理由を返す（UIが前もって表示するため）。
+   * target を省略して、対象が2つ以上あるときは { ok: true, needsTarget: true }（出せるけど選ぶ必要がある）
+   * @returns {{ok: true, needsTarget?: true} | {ok: false, reason: string}}
+   */
+  canPlayCard(cardId, target) {
+    const check = this.checkPlayable(cardId);
+    if (!check.ok) return check;
+    const t = this.resolveTarget(check.player, check.card, target);
+    if (!t.ok) return t;
+    return t.needsTarget ? { ok: true, needsTarget: true } : ok();
+  }
+
+  /**
+   * そのカードを今出せる対象の一覧（読むだけ）。出せないときは空の配列
+   * @returns {object[]}
+   */
+  getTargets(cardId) {
+    const check = this.checkPlayable(cardId);
+    if (!check.ok) return [];
+    return this.listTargets(check.player, check.card).targets.map((t) => ({ ...t }));
   }
 
   /**
    * メイン：カードを1枚使う。
    * @param {string} cardId
-   * @param {*} [target] STEP 1 では使わない（対象は自動で決まる）。将来のために残している
+   * @param {object} [target] 対象（{ playerId } など）。対象が1つしかないときは省略できる
    */
   playCard(cardId, target) {
-    const check = this.canPlayCard(cardId);
+    const check = this.checkPlayable(cardId);
     if (!check.ok) return check;
+    const { player } = check;
+    const resolved = this.resolveTarget(player, check.card, target);
+    if (!resolved.ok) return resolved;
+    if (resolved.needsTarget) return { ok: false, reason: '対象を選んでください', needsTarget: true };
 
-    const player = this.players[this.currentPlayer];
     const card = player.takeFromHand(cardId);
     player.playedThisTurn = true;
     // 使ったカードは（兵士も）すぐ捨て札へ。使い切りのカードは、二度と山札に戻らない置き場へ
@@ -390,27 +529,31 @@ export class Game {
     this.emit('cardPlayed', { playerId: player.id, cardId: card.cardId, type: card.type });
 
     if (card.isSoldier) {
+      const targetId = resolved.target.playerId;
+      const road = this.roadBetween(player.id, targetId);
       const soldierId = `s${String(this.nextSoldierNumber++).padStart(2, '0')}`;
-      const soldier = new Soldier(soldierId, card);
+      const soldier = new Soldier(soldierId, card, road.roadId, targetId);
       player.soldiers.push(soldier);
       this.emit('soldierDeployed', {
         playerId: player.id,
         soldierId,
         type: card.type,
+        roadId: road.roadId,
+        targetId,
         position: soldier.position,
         hp: soldier.hp,
         attack: soldier.attack,
       });
     } else {
-      this.castSpell(player, card);
+      this.castSpell(player, card, this.players[resolved.target.playerId]);
     }
 
     this.checkGameOver();
     return ok();
   }
 
-  castSpell(player, card) {
-    const enemy = this.opponentOf(player.id);
+  castSpell(player, card, targetPlayer) {
+    const enemy = targetPlayer;
     const { effect, amount } = card.def;
 
     switch (effect) {
@@ -501,15 +644,16 @@ export class Game {
 
   passTurn() {
     this.players[this.currentPlayer].playedThisTurn = false;
-    this.beginTurn(this.opponentOf(this.currentPlayer).id);
+    this.beginTurn(this.nextPlayerAfter(this.currentPlayer));
   }
 
   /** どちらかの城HPが0以下なら決着させる。決着したら true */
   checkGameOver() {
     if (this.phase === 'gameOver') return true;
-    const loser = PLAYER_IDS.find((id) => this.players[id].castle.isDestroyed);
+    const loser = this.alivePlayerIds().find((id) => this.players[id].castle.isDestroyed);
     if (!loser) return false;
-    this.winner = this.opponentOf(loser).id;
+    // 城を削れるのは手番の人の行動だけなので、勝つのは手番の人（2人なら、城が残っている方）
+    this.winner = this.currentPlayer;
     this.phase = 'gameOver';
     this.emit('gameOver', { winner: this.winner });
     return true;
@@ -523,8 +667,10 @@ export class Game {
    */
   getState(viewerId) {
     const players = {};
-    for (const id of PLAYER_IDS) players[id] = this.players[id].toState(id === viewerId);
+    for (const id of this.playerOrder) players[id] = this.players[id].toState(id === viewerId);
     return {
+      playerOrder: [...this.playerOrder],
+      roads: this.roads.map((r) => r.toState()),
       turn: this.turn,
       currentPlayer: this.currentPlayer,
       phase: this.phase,
@@ -542,7 +688,7 @@ export class Game {
 
   /** 城HPを変える（1〜その城の上限） */
   debugSetCastleHp(playerId, hp) {
-    if (!this.players[playerId]) return fail('プレイヤーIDは "p1" か "p2" です');
+    if (!this.players[playerId]) return fail('そのプレイヤーはいません');
     if (this.phase === 'gameOver') return fail('ゲームは終わっています');
     const max = this.players[playerId].castle.maxHp;
     if (!Number.isInteger(hp) || hp < 1 || hp > max) return fail(`HPは1〜${max}の整数にしてください`);
@@ -552,7 +698,7 @@ export class Game {
 
   /** 手札をカード種類の並びで作り直す（例: ["infantry", "fireball"]）。カードIDは新しく振る */
   debugSetHand(playerId, types) {
-    if (!this.players[playerId]) return fail('プレイヤーIDは "p1" か "p2" です');
+    if (!this.players[playerId]) return fail('そのプレイヤーはいません');
     if (this.phase === 'discard') return fail('手札を捨てている途中は変えられません');
     const bad = this.findUnknownType(types);
     if (bad !== null) return fail(bad);
