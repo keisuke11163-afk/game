@@ -1,0 +1,5 @@
+{
+  "slime":  { "name": "スライム", "hp": 4,  "attack": 1, "element": "water", "reward": 2, "castleAttack": 2, "attackEvery": 3, "weight": 5 },
+  "goblin": { "name": "ゴブリン", "hp": 7,  "attack": 3, "element": "wood",  "reward": 3, "castleAttack": 3, "attackEvery": 2, "weight": 3 },
+  "dragon": { "name": "ドラゴン", "hp": 12, "attack": 5, "element": "fire",  "reward": 6, "castleAttack": 5, "attackEvery": 2, "weight": 1 }
+}

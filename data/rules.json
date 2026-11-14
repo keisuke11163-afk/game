@@ -1,9 +1,22 @@
 {
-  "castleMaxHp": 25,
-  "secondPlayerCastleBonus": 2,
+  "castleMaxHp": 40,
+  "secondPlayerCastleBonus": 1,
   "initialHand": 5,
   "drawPerTurn": 1,
   "firstTurnDraw": 1,
   "maxHand": 8,
-  "laneLength": 5
+  "laneLength": 3,
+  "advanceAfterWin": false,
+  "soldierCastleDamageMultiplier": 2,
+  "elementBonus": 2,
+  "monsterFirstRound": 3,
+  "monsterCooldownRounds": 2,
+  "monsterSpawnChance": 0.35,
+  "playerCount": 2,
+  "winCondition": "firstDestroy",
+  "castleSpellRange": "any",
+  "maxRounds": 60,
+  "deckMode": "shared",
+  "defaultCastle": "standard",
+  "defaultDeck": "balanced"
 }

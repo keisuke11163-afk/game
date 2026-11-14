@@ -1,8 +1,31 @@
 // カード1枚。数値は data/cards.json の定義から受け取る（コードに数値を書かない）。
 // DOM は使わない（後でサーバーに移すため）。
 
-export const CARD_KINDS = ['soldier', 'spell'];
-export const SPELL_EFFECTS = ['damageEnemyCastle', 'damageEnemySoldiers', 'healOwnCastle'];
+export const CARD_KINDS = ['soldier', 'spell', 'weapon', 'defense'];
+export const ELEMENTS = ['fire', 'water', 'wood'];
+
+/** effect ごとに、必要な数値のキー */
+export const EFFECTS = {
+  spell: {
+    damageEnemyCastle: ['amount'],
+    damageEnemySoldiers: ['amount'],
+    healOwnCastle: ['amount'],
+    poisonEnemySoldiers: ['amount', 'turns'],
+    freezeEnemySoldiers: ['turns'],
+  },
+  defense: {
+    shieldSoldier: ['amount'],
+    armorCastle: ['amount'],
+  },
+};
+
+/** kind → 出し方（slot）。main は1ターン1枚、addon と defense は何枚でも */
+export const SLOT_OF_KIND = {
+  soldier: 'main',
+  spell: 'main',
+  weapon: 'addon',
+  defense: 'defense',
+};
 
 export class Card {
   /**
@@ -18,6 +41,11 @@ export class Card {
 
   get kind() {
     return this.def.kind;
+  }
+
+  /** "main" | "addon" | "defense" */
+  get slot() {
+    return SLOT_OF_KIND[this.def.kind];
   }
 
   get isSoldier() {
@@ -61,16 +89,27 @@ export class Card {
       if (def.exhaust !== undefined && typeof def.exhaust !== 'boolean') {
         throw new Error(`${where}: exhaust は true か false にしてください（書かなければ false）`);
       }
+      if (def.element !== undefined && def.kind !== 'weapon') {
+        throw new Error(`${where}: element を書けるのは武器（kind: "weapon"）だけです`);
+      }
+      if (def.element !== undefined && def.element !== null && !ELEMENTS.includes(def.element)) {
+        throw new Error(`${where}: element は ${ELEMENTS.join(' / ')} のどれかにしてください（書かなければ属性なし）`);
+      }
 
       if (def.kind === 'soldier') {
         for (const key of ['hp', 'attack', 'speed']) {
           if (!isPositive(def[key])) throw new Error(`${where}: ${key} は1以上の整数にしてください`);
         }
+      } else if (def.kind === 'weapon') {
+        if (!isCount(def.attackBonus)) throw new Error(`${where}: attackBonus は0以上の整数にしてください`);
       } else {
-        if (!SPELL_EFFECTS.includes(def.effect)) {
-          throw new Error(`${where}: effect は ${SPELL_EFFECTS.join(' / ')} のどれかです`);
+        const effects = EFFECTS[def.kind];
+        if (!Object.hasOwn(effects, def.effect)) {
+          throw new Error(`${where}: effect は ${Object.keys(effects).join(' / ')} のどれかです`);
         }
-        if (!isPositive(def.amount)) throw new Error(`${where}: amount は1以上の整数にしてください`);
+        for (const key of effects[def.effect]) {
+          if (!isPositive(def[key])) throw new Error(`${where}: ${key} は1以上の整数にしてください`);
+        }
       }
     }
   }

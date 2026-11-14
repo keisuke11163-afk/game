@@ -4,7 +4,7 @@ import { Castle } from './Castle.js';
 
 export class Player {
   /**
-   * @param {string} id "p1" か "p2"
+   * @param {string} id "p1"〜"p8"
    * @param {number} castleMaxHp
    */
   constructor(id, castleMaxHp) {
@@ -15,6 +15,16 @@ export class Player {
     /** @type {import('./Soldier.js').Soldier[]} 出した順に並ぶ */
     this.soldiers = [];
     this.playedThisTurn = false;
+    /** 負けて抜けたか（3人以上のとき） */
+    this.eliminated = false;
+    /** このターンに出したカードの枚数（メイン・付加・防御すべて） */
+    this.cardsPlayedThisTurn = 0;
+    /** 城壁の残り。次の自分のターンの始めに消える */
+    this.armor = 0;
+    /** コイン（魔物のとどめでもらう） */
+    this.coins = 0;
+    /** 強化ID → 買った回数 */
+    this.upgradesBought = {};
   }
 
   findInHand(cardId) {
@@ -39,6 +49,10 @@ export class Player {
     return {
       castleHp: this.castle.hp,
       castleMaxHp: this.castle.maxHp,
+      eliminated: this.eliminated,
+      cardsPlayedThisTurn: this.cardsPlayedThisTurn,
+      armor: this.armor,
+      coins: this.coins,
       hand: showHand ? this.hand.map((c) => c.toState()) : null,
       handCount: this.hand.length,
       playedThisTurn: this.playedThisTurn,
