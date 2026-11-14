@@ -48,11 +48,11 @@ if (args.includes('--json')) {
   const pct = (x) => `${Math.round(x * 100)}%`;
   console.log(`試合数 ${games}・シード ${seed}`);
   console.log('「決着」は3000手番までに決着した試合数。手番は決着した試合だけで数える。');
-  console.log('| 組み合わせ | 決着 | 平均手番（中央値・最大） | p1 の勝率 | 兵士からの城ダメージ | 戦い/試合 | 魔物を倒す/試合 | 魔物の城ダメージ/試合 | 捨てる場面 | 出せる種類が2以上 |');
-  console.log('|---|---|---|---|---|---|---|---|---|---|');
+  console.log('| 組み合わせ | 決着 | 平均手番（中央値・最大） | p1 の勝率 | 兵士からの城ダメージ | 戦い/試合 | 魔物を倒す/試合 | 魔物の城ダメージ/試合 | 魔物で決着 | 捨てる場面 | 出せる種類が2以上 |');
+  console.log('|---|---|---|---|---|---|---|---|---|---|---|');
   for (const r of rows) {
     console.log(
-      `| ${r.strategies.join(' vs ')} | ${r.decided}/${r.games} | ${r.avgTurns?.toFixed(1)}（${r.medianTurns}・${r.maxTurns}） | ${pct(r.winRate.p1 || 0)}±${pct(r.p1Margin ?? 0)} | ${pct(r.soldierDamageShare)} | ${r.clashesPerGame.toFixed(1)} | ${r.monstersDefeatedPerGame.toFixed(1)} | ${r.monsterCastleDamagePerGame.toFixed(1)} | ${pct(r.discardRate)} | ${pct(r.choiceRate)} |`,
+      `| ${r.strategies.join(' vs ')} | ${r.decided}/${r.games} | ${r.avgTurns?.toFixed(1)}（${r.medianTurns}・${r.maxTurns}） | ${pct(r.winRate.p1 || 0)}±${pct(r.p1Margin ?? 0)} | ${pct(r.soldierDamageShare)} | ${r.clashesPerGame.toFixed(1)} | ${r.monstersDefeatedPerGame.toFixed(1)} | ${r.monsterCastleDamagePerGame.toFixed(1)} | ${pct(r.endedByMonsterRate)} | ${pct(r.discardRate)} | ${pct(r.choiceRate)} |`,
     );
   }
 }

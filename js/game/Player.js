@@ -6,9 +6,8 @@ export class Player {
   /**
    * @param {string} id "p1"〜"p8"
    * @param {number} castleMaxHp
-   * @param {number} [drawPerTurn] 最初の「次のターンに引く枚数」
    */
-  constructor(id, castleMaxHp, drawPerTurn = 0) {
+  constructor(id, castleMaxHp) {
     this.id = id;
     this.castle = new Castle(castleMaxHp);
     /** @type {import('./Card.js').Card[]} */
@@ -20,12 +19,8 @@ export class Player {
     this.eliminated = false;
     /** このターンに出したカードの枚数（メイン・付加・防御すべて） */
     this.cardsPlayedThisTurn = 0;
-    /** 次のターンに引く枚数 */
-    this.drawNextTurn = drawPerTurn;
     /** 城壁の残り。次の自分のターンの始めに消える */
     this.armor = 0;
-    /** 伏せたトラップ [{ trapId, roadId, square, type }]（square は道のマス番号） */
-    this.traps = [];
     /** コイン（魔物のとどめでもらう） */
     this.coins = 0;
     /** 強化ID → 買った回数 */
@@ -48,7 +43,7 @@ export class Player {
   }
 
   /**
-   * @param {boolean} showHand 手札の中身とトラップの種類を見せるか（相手には枚数・場所だけ）
+   * @param {boolean} showHand 手札の中身を見せるか（相手には枚数だけ）
    */
   toState(showHand) {
     return {
@@ -56,10 +51,8 @@ export class Player {
       castleMaxHp: this.castle.maxHp,
       eliminated: this.eliminated,
       cardsPlayedThisTurn: this.cardsPlayedThisTurn,
-      drawNextTurn: this.drawNextTurn,
       armor: this.armor,
       coins: this.coins,
-      traps: this.traps.map((t) => ({ trapId: t.trapId, roadId: t.roadId, square: t.square, type: showHand ? t.type : null })),
       hand: showHand ? this.hand.map((c) => c.toState()) : null,
       handCount: this.hand.length,
       playedThisTurn: this.playedThisTurn,
