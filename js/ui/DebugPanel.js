@@ -80,6 +80,7 @@ export class DebugPanel {
         <input type="number" class="seed" value="${this.getSeed()}">
         <button type="button" class="restart">このシードで最初から</button></div>
       <div class="note">URL に &amp;seed=${this.getSeed()} を付けると、毎回同じ順番で始まります</div>
+      <div class="note">URL に &amp;rules={&quot;monsterFirstRound&quot;:1,&quot;monsterSpawnChance&quot;:1} のように付けると、ルールの一部だけ変えて試せます（魔物をすぐ出す など）</div>
 
       <h3>山札の順番（上から）</h3>
       <div class="row"><input type="text" class="deck" placeholder="infantry,fireball,knight">

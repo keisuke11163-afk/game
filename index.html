@@ -17,6 +17,7 @@
           <span class="card-back-icon" aria-hidden="true"></span>
           <b id="opp-hand-count">0</b>枚
         </span>
+        <span class="coins" id="opp-coins" title="相手のコイン" hidden><span class="coin-icon" aria-hidden="true"></span><b>0</b></span>
       </div>
       <div class="turn-info" id="turn-info"></div>
       <div class="pile-info">
@@ -25,12 +26,13 @@
       </div>
     </header>
 
-    <!-- 盤面：相手の城 / 2本のレーン / 自分の城 -->
+    <!-- 盤面：相手の城 / 1本の道（左が相手の兵士・右が自分の兵士） / 自分の城 -->
     <main id="board">
       <section class="castle" id="castle-opp" data-side="opp">
         <div class="castle-body">
           <div class="castle-wall" aria-hidden="true"></div>
           <div class="castle-label" id="castle-opp-label"></div>
+          <div class="castle-armor" hidden></div>
           <div class="hp-row">
             <div class="hp-bar"><div class="hp-lag"></div><div class="hp-fill"></div></div>
             <div class="hp-text"><b class="hp-value">0</b><span class="hp-max"></span></div>
@@ -49,6 +51,7 @@
           <div class="cells"></div>
           <div class="soldier-layer"></div>
         </div>
+        <div id="monster-layer"></div>
         <div id="drop-hint" hidden>ここで離すと使う</div>
       </section>
 
@@ -56,6 +59,7 @@
         <div class="castle-body">
           <div class="castle-wall" aria-hidden="true"></div>
           <div class="castle-label" id="castle-me-label"></div>
+          <div class="castle-armor" hidden></div>
           <div class="hp-row">
             <div class="hp-bar"><div class="hp-lag"></div><div class="hp-fill"></div></div>
             <div class="hp-text"><b class="hp-value">0</b><span class="hp-max"></span></div>
@@ -74,16 +78,34 @@
         </div>
         <button type="button" class="detail-use">使う</button>
       </div>
+      <div id="target-bar" hidden>
+        <span class="target-msg"></span>
+        <button type="button" class="target-cancel">やめる</button>
+      </div>
       <div id="discard-bar" hidden>
         <span class="discard-msg"></span>
         <button type="button" class="discard-ok">捨てる</button>
       </div>
       <div class="control-row">
         <p id="message"></p>
+        <button id="upgrade-open" type="button" title="コインで強化を買う" hidden>
+          <span class="coin-icon" aria-hidden="true"></span><b id="my-coins">0</b><span class="upgrade-open-label">強化</span>
+        </button>
         <button id="end-turn" type="button">ターン終了</button>
       </div>
       <div id="hand"></div>
     </footer>
+
+    <!-- コインで買う強化 -->
+    <div id="upgrade-panel" hidden>
+      <div class="upgrade-head">
+        <b>強化を買う</b>
+        <span class="upgrade-coins"></span>
+        <button type="button" class="upgrade-close" aria-label="閉じる">✕</button>
+      </div>
+      <div class="upgrade-list"></div>
+      <p class="upgrade-note">コインは魔物にとどめを刺すともらえます。強化はメインの1枚とは別に、何回でも買えます</p>
+    </div>
 
     <div id="toast" role="status" aria-live="polite"></div>
     <div id="fx-layer" aria-hidden="true"></div>
