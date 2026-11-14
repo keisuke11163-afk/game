@@ -60,7 +60,7 @@ YouTube「桜井政博のゲーム作るには」の考え方を、このゲー�
 
 | 領域 | フォルダ・ファイル | 内容 |
 |---|---|---|
-| ゲームロジック | `js/game/`、`data/`、`tests/` | ターン進行、兵士の進軍、カード効果、勝敗判定、数値データ、自動テストとシミュレーション |
+| ゲームロジック | `js/game/`、`data/`、`tests/`、`server/` | ターン進行、兵士の進軍、カード効果、勝敗判定、数値データ、自動テストとシミュレーション、オンライン対戦のサーバー |
 | 画面（UI） | `index.html`、`css/`、`js/ui/`、`js/main.js`、`assets/` | レイアウト、手札の表示、アニメーション、入力、Game と UI の接続、画像素材 |
 | 共有 | `CLAUDE.md` | 変更は2人で相談してから。PRで相手の承認を必須とする |
 
@@ -545,6 +545,47 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
   - 周回の始め：`turnStarted` → `roundStarted` → 魔物の城への攻撃（出た順）→ `monsterAppeared`（道の順）→（STEP 2 の `armorExpired`）→ ドロー → 進軍。魔物の攻撃で城が落ちたら `monsterAttackedCastle` → `gameOver` で止まる
   - 兵士と魔物の戦い：`soldierMoved` → `monsterClashed` → `monsterDamaged` → `soldierDamaged`（兵士）→（魔物が0なら）`monsterDefeated` → `coinsChanged` →（兵士が0なら）`soldierDestroyed`
   - ファイアボールで魔物：`spellCast`（`target` は `monsterId`）→ `monsterDamaged` →（0なら）`monsterDefeated` → `coinsChanged`
+
+## STEP 4：オンライン対戦
+
+### しくみ
+- サーバーは `server/`（Node.js 22.7 以上。**外部パッケージなし**）。Game（`js/game/`）をそのまま動かす。乱数もサーバーだけが持つ
+- 起動：リポジトリのルートで `node server/server.js`（ポートは環境変数 `PORT`、省略すると 8787）。`data/` の JSON はサーバーが読む
+- 通信は HTTP だけ（WebSocket は使わない。外部パッケージなしで作れて、ブラウザでもそのまま使えるため）
+  - ブラウザ → サーバー：`fetch` で `POST`（JSON）
+  - サーバー → ブラウザ：Server-Sent Events（`EventSource` で受け取る）
+- **合言葉で部屋に入る**：同じ合言葉を入れた人が同じ部屋に入る。人数（`rules.playerCount`、今は2）がそろったら自動で始まる。入った順に `p1`、`p2` …
+- 見えてはいけない情報は、サーバーが `js/game/visibility.js` の決まりでプレイヤーごとに隠してから送る（Game はそのまま）
+
+### 送るもの（ブラウザ → サーバー）
+| URL | 送る JSON | 返る JSON |
+|---|---|---|
+| `POST /api/join` | `{ passphrase, name }` … 合言葉（1〜32文字）と表示名（1〜16文字） | `{ ok: true, roomId, playerId, token }` か `{ ok: false, reason }`。`token` はその人だけの鍵（以後ずっと使う） |
+| `POST /api/action` | `{ token, method, args }` … `method` は `playCard` / `discard` / `endTurn` / `buyUpgrade` / `rematch` のどれか。`args` は Game のメソッドに渡す引数の配列（例：`["c07", { "playerId": "p2" }]`） | Game のメソッドの返り値（`{ ok }` / `{ ok: false, reason }`）。自分の番でない人の操作は `{ ok: false, reason: "あなたの番ではありません" }` |
+
+- `rematch`：全員が送ったら、同じ部屋・同じ席で新しい試合が始まる（負けた人もすぐ「もう1回」できるように）
+
+### 届くもの（サーバー → ブラウザ）
+`GET /api/stream?token=...` を `EventSource` で開く。メッセージは JSON で、`type` で分かれる。
+
+| `type` | 中身 | いつ |
+|---|---|---|
+| `room` | `{ roomId, players: [{ playerId, name, connected }], capacity, started }` | 入ったとき・誰かが入った／抜けたとき |
+| `event` | `{ event, payload }` … Game のイベント（「Gameが出すイベント」の表）を、その人向けに隠したもの | 起きた順に |
+| `state` | `{ state, playable, upgrades }` … `state` は `getState(自分)`。`playable` は自分の手札の各カードの `{ cardId, ok, reason, needsTarget, targets }`（自分の番でないときは全部 `ok: false`）。`upgrades` は `{ upgradeId: { ok, reason } }` | 操作のたび（その操作のイベントを全部送ったあと）・つないだとき |
+
+- つなぎ直したとき（`EventSource` は自動でつなぎ直す）は、`room` と `state` が届くので、それで画面を描き直す
+- 画面は、イベントで演出し、`state` で答え合わせをする（同じ端末のときと同じ）。出せない理由は `playable` を使う（ブラウザに Game はない）
+
+### 隠す情報（`js/game/visibility.js`）
+| イベント | 本人以外に送るとき |
+|---|---|
+| `cardDrawn` | `cardIds` を消し、`count`（枚数）だけにする |
+| `cardDiscarded` | `cardIds` はそのまま（捨てたカードは表向き）。種類は `state` の捨て札には出ない |
+| `cardPlayed` | そのまま |
+
+- `getState(自分)` は、相手の手札を `null` にしている（STEP 1 のとおり）
+- 山札の順番・乱数は送らない
 
 ## 全体の設計（STEP 2〜5 の見通し）
 
