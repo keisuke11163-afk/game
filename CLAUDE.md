@@ -238,7 +238,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 - ターンの始め：`turnStarted` → ドロー → 進軍
   - ドロー：山札が途中で尽きたら `deckShuffled` → 残りを引く。`cardDrawn` は引いたぶんを1回にまとめて出す。1枚も引かなければ `cardDrawn` は出さない
   - 進軍：兵士は出した順に1体ずつ動く。城に着いた兵士は `soldierMoved` → `castleDamaged` → `soldierDestroyed`（`"reachedCastle"`）の順に出す
-  - 城に着いた兵士の `soldierMoved.to` は `laneLength` にそろえる（5以上に進んでも 5）
+  - 城に着いた兵士の `soldierMoved.to` は `laneLength` にそろえる（`laneLength` 以上に進んでも `laneLength`）
   - 兵士同士が戦うとき：`soldierMoved`（止まった位置まで。動かなければ出さない）→ `soldiersClashed` → `soldierDamaged`（守る側）→ `soldierDamaged`（攻める側）→ HPが0以下の兵士の `soldierDestroyed`（`"killed"`）。両方消えるときは**守る側 → 攻める側**の順（`soldierDamaged` と同じ順番）
   - 戦いで相手だけが消えて進み続けるとき（`advanceAfterWin`）：上の戦いのイベントのあと、続きの `soldierMoved`（さっき止まったマスから）→（また相手に会えば）`soldiersClashed` …、城に着けば `castleDamaged` → `soldierDestroyed`（`"reachedCastle"`）。1体の兵士の `soldierMoved` が1回の進軍で2回以上出ることがある
   - 進軍の途中で城HPが0以下になったら、残りの兵士は動かさずにすぐ `gameOver` を出す
@@ -307,7 +307,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
      - 捨てる枚数ちょうどを一度に選ぶ。捨て終わったら、そのまま次の人のターンになる
 - 道：城と城の間は**1本の道**で、3マス（`laneLength`）。両方のプレイヤーの兵士が同じ道を向かい合って進む
   - 出した兵士は位置0（自分の城の前のマス）に置かれ、出したターンには動かない。そのマスに相手の兵士がいても出せる
-  - 進軍で位置が5以上になったら「相手の城に着いた」とする（ぴったりでなくてよい）
+  - 進軍で位置が `laneLength`（3）以上になったら「相手の城に着いた」とする（ぴったりでなくてよい）
   - 例：歩兵は出した次のターンから 2 → 4 で、2回目の進軍で城に着く。騎士は 3 で1回目に着く（どちらも邪魔されなかった場合）
   - 自分の兵士同士は、同じマスに何体いてもよい
 - 兵士同士の戦い
