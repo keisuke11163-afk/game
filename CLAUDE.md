@@ -600,6 +600,52 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 - `getState(自分)` は、相手の手札を `null` にしている（STEP 1 のとおり）
 - 山札の順番・乱数は送らない
 
+## STEP 5：拡張（最大8人・デッキ対戦・城の種類・勝利条件）
+
+> **注意（#16 のレビューで決めたこと）**：3人以上のルール（道のつなぎ方・勝ち方・魔物の扱い）は、まだ決めていない。この STEP 5 の「人数」「勝利条件」に書いた**輪（となりどうし）の道と、3人以上の勝ち方は試作**で、STEP 5 で実際に遊んでから「全体の設計」の「3人以上のルールの案」（真ん中に広場・チーム戦）に合わせて作り直す。2人のときの遊び方（城の種類・デッキ対戦を含む）は、ここに書いたとおり。
+
+**数値はすべて仮**。設定はすべて `data/`（`rules.json`・`castles.json`・`decks.json`）で切り替える。
+
+### 人数
+- `rules.playerCount`：2〜8（省略すると2）。席順に `p1`〜`p8`。道は「となりの席どうし」（#16）
+- 席ごとの城ボーナス：`rules.seatCastleBonus`（席ごとの数の配列、省略できる）。省略すると、2人なら `[0, secondPlayerCastleBonus]`、3人以上なら席 i（0から）に `round(secondPlayerCastleBonus × i ÷ (人数−1))`（後ろの席ほど少し多い）
+- 兵士は道でつながった相手（となりの2人）にだけ送れる。ファイアボールなど城への魔法の届く相手は `rules.castleSpellRange`：`"neighbors"`（となりだけ）か `"any"`（誰にでも）。**仮：`"neighbors"`**（シミュレーションで決めた。下）。2人ならどちらも同じ
+
+### 勝利条件（`rules.winCondition`）
+| 値 | 勝ち方 | 城が落ちた人 |
+|---|---|---|
+| `"firstDestroy"`（省略したとき） | **最初にどこかの城を落とした人の勝ち**（2人なら今と同じ） | — |
+| `"lastStanding"` | 最後まで城が残った1人の勝ち | 負けて抜ける（`playerEliminated`）。その人の兵士は消え、手札は捨て札へ。その人の道はなくなり、両どなりが新しい道でつながる（なくなった道の兵士・魔物も消える） |
+
+- **周回の上限 `rules.maxRounds`**（仮：40。0 なら上限なし）：その周回を全員が終えても決着していなければ、城HPの残りの割合（`castleHp ÷ castleMaxHp`）がいちばん多い人の勝ち。同じなら城HPが多い人、それも同じなら席順が後ろの人（先攻有利をやわらげる）。必ず決着させるため
+- `gameOver` に `reason` を足す：`"castleDestroyed"`（城を落とした）／`"lastStanding"`（最後の1人）／`"roundLimit"`（周回の上限）
+
+### 城の種類（`data/castles.json`）
+- 席ごとに城の種類を選べる：`new Game({ ..., castles, setup: { castles: ["fortress", "tower"] } })`。`setup` を省略すると全員 `rules.defaultCastle`（仮：`"standard"`）
+- 城の種類ごとに：`hpBonus`（城HPと上限に足す）、`maxHandBonus`（手札の上限に足す）、`castleSpellBonus`（自分が使う城への魔法のダメージに足す）、`soldierAttackBonus`（自分が出す兵士の攻撃力に足す）。どれも省略すると0
+
+| type | 名前 | 長所 | 短所 |
+|---|---|---|---|
+| `standard` | ふつうの城 | — | — |
+| `fortress` | とりで | 城HP+8 | 手札の上限−2 |
+| `tower` | 魔法の塔 | 城への魔法+3 | 城HP−5 |
+| `barracks` | 兵舎 | 出す兵士の攻撃+1 | 城HP−4 |
+
+### デッキ対戦（`rules.deckMode`）
+- `"shared"`（省略したとき）：今と同じ、全員共通の山札
+- `"own"`：1人1つずつ山札・捨て札・使い切り置き場を持つ。中身は `data/decks.json` のデッキ（`{ name, cards: { type: 枚数 } }`）。席ごとに選ぶ：`setup: { decks: ["aggro", "control"] }`。省略すると全員 `rules.defaultDeck`
+  - `getState()`：`deckMode`。`"own"` のとき、いちばん上の `deckCount` / `discardCount` / `exhaustedCount` は viewer 本人の数（viewer がいなければ `null`）、`players.pX.deckCount` などにそれぞれの数。`"shared"` のときは `players.pX` の方が `null`
+  - `deckShuffled` に `playerId`（`"own"` のとき、だれの山札か。`"shared"` のときは `null`）を足す
+
+### ロジックとUIの約束に足すもの（STEP 5）
+- `new Game({ cards, rules, rng, monsters, upgrades, castles, decks, setup })`。`castles` / `decks` / `setup` は省略できる
+- `getState()`：`deckMode`、`players.pX.castleType`、`players.pX.maxHand`、`players.pX.deckCount` / `discardCount` / `exhaustedCount`（`"own"` のときだけ数）
+- イベント
+  - `playerEliminated`：`{ playerId, by }`（`by` は城を落とした人）
+  - `roadClosed`：`{ roadId }` → その道の兵士の `soldierDestroyed`（`reason: "roadClosed"`）／`roadOpened`：`{ roadId, players }`
+  - `gameOver`：`{ winner, reason }`
+- 順番（`"lastStanding"` で城が落ちたとき）：`castleDamaged` → `playerEliminated` → 抜けた人の兵士の `soldierDestroyed`（`"eliminated"`）→ `roadClosed` →（その道の兵士の `soldierDestroyed`（`"roadClosed"`））→ `roadOpened` →（残りが1人なら）`gameOver`
+
 ## 全体の設計（STEP 2〜5 の見通し）
 
 STEP 2 以降で作り直しにならないよう、Game をどう広げるかを先に決めておく。**ここに書いた形は「これから作るときの約束」で、各STEPの実装PRで少しずつ入る。** 入った時点で「ロジックとUIの約束」の表に移す。
