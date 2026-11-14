@@ -582,10 +582,9 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 |---|---|
 | `cardDrawn` | `cardIds` を消し、`count`（枚数）だけにする |
 | `cardDiscarded` | `cardIds` はそのまま（捨てたカードは表向き）。種類は `state` の捨て札には出ない |
-| `cardPlayed` | そのまま（トラップは Game が `type: null` にしている） |
-| `trapSet` | そのまま（種類は入っていない） |
+| `cardPlayed` | そのまま |
 
-- `getState(自分)` は、相手の手札を `null`、相手のトラップの種類を `null` にしている（STEP 1・2 のとおり）
+- `getState(自分)` は、相手の手札を `null` にしている（STEP 1 のとおり）
 - 山札の順番・乱数は送らない
 
 ## 全体の設計（STEP 2〜5 の見通し）
