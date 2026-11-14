@@ -7,5 +7,6 @@
   "maxHand": 8,
   "laneLength": 3,
   "advanceAfterWin": false,
-  "soldierCastleDamageMultiplier": 2
+  "soldierCastleDamageMultiplier": 2,
+  "elementBonus": 2
 }

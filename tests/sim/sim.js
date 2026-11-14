@@ -36,8 +36,8 @@ export function runMatch({ cards, rules, strategies, seed, maxTurns = 3000, game
       if (type === 'castleDamaged') {
         const kind = e.source?.kind ?? 'other';
         const key = kind in stats.castleDamage ? kind : 'other';
-        stats.castleDamage[key] += e.amount;
-        if (kind === 'spell') stats.spellDamageByType[e.source.type] = (stats.spellDamageByType[e.source.type] || 0) + e.amount;
+        stats.castleDamage[key] += e.amount - (e.blocked ?? 0);
+        if (kind === 'spell') stats.spellDamageByType[e.source.type] = (stats.spellDamageByType[e.source.type] || 0) + e.amount - (e.blocked ?? 0);
       }
       if (type === 'soldiersClashed') stats.clashes += 1;
       if (type === 'cardPlayed') stats.played[e.type] = (stats.played[e.type] || 0) + 1;

@@ -149,7 +149,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 - 兵士ID（soldierId）：場に出た兵士につく一意のID。例：`"s03"`
 - カードIDは山札をシャッフルしたあとの順に振る。IDから種類は分からない
 - 道ID（roadId）：道のID。2人のときは2人のIDを席順で `-` でつなぐ（3人以上の道の形は STEP 5 で決める）。例：`"p1-p2"`。2人なら道は `"p1-p2"` の1本だけ
-- 対象（target）：カードを出す先。今は `{ playerId }` だけ（兵士は送り込む相手、ファイアボール・サンダーは攻める相手、ヒールは自分）。STEP 2 以降で `{ soldierId }` などが増える（「全体の設計」の「対象の選び方」）
+- 対象（target）：カードを出す先。`{ playerId }`（兵士は送り込む相手、攻撃の魔法は攻める相手、ヒール・城壁は自分）、`{ soldierId }`（武器・盾：道の上の自分の兵士）。STEP 3 で `{ monsterId }` が増える
 
 ### UIから呼ぶもの
 
@@ -201,9 +201,17 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
       castleMaxHp: 40,         // その城の上限。後攻（p2）は castleMaxHp + secondPlayerCastleBonus
       hand: [{ cardId: "c07", type: "infantry" }],  // viewer 本人のみ。相手は null
       handCount: 7,
-      playedThisTurn: false,
+      playedThisTurn: false,   // このターンにメインのカードを出したか
       eliminated: false,       // 負けて抜けたか（3人以上のときに使う。2人ならいつも false）
-      soldiers: [{ soldierId: "s03", type: "knight", hp: 4, attack: 5, position: 3, roadId: "p1-p2", targetId: "p2" }]
+      cardsPlayedThisTurn: 2,  // このターンに出した枚数（メイン・付加・防御すべて）
+      armor: 0,                // 城壁の残り
+      soldiers: [{
+        soldierId: "s03", type: "knight", hp: 4, attack: 6, position: 3, roadId: "p1-p2", targetId: "p2",
+        weapon: "waterSpear",  // 持っている武器のカード種類か null
+        element: "water",      // "fire" | "water" | "wood" | null
+        shield: 0,             // 盾の残り
+        statuses: { poison: { amount: 1, turns: 2 } /* か null */, frozen: 0 /* 凍結の残り回数 */ }
+      }]
     },
     p2: { /* 同じ形 */ }
   }
@@ -234,11 +242,17 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `soldierDeployed` | `{ playerId, soldierId, type, roadId, targetId, position, hp, attack }` … `hp` / `attack` は出した時点の値 |
 | `soldierMoved` | `{ playerId, soldierId, roadId, from, to }` |
 | `soldiersClashed` | `{ attacker: { playerId, soldierId }, defender: { playerId, soldierId }, roadId, square }` … 道の上で兵士同士がぶつかった。`attacker` は進軍中の側。`square` は**攻める側が止まったマス**の道のマス番号（1マス先の相手と戦うときも攻める側のマス） |
-| `soldierDamaged` | `{ playerId, soldierId, amount, hp }` |
+| `soldierDamaged` | `{ playerId, soldierId, amount, hp, cause, blocked }` … `cause` は `"fight"` / `"spell"` / `"poison"`。`blocked` は盾が受けた量（`amount` は与えようとしたダメージ） |
 | `soldierDestroyed` | `{ playerId, soldierId, reason }` … `reason` は `"killed"` か `"reachedCastle"` |
 | `spellCast` | `{ playerId, type, target }` … `target` は効果を受けるプレイヤーIDの**文字列**（`playCard` に渡す `target` のオブジェクトとは形が違う）（ファイアボール・サンダーは相手、ヒールは自分） |
-| `castleDamaged` | `{ playerId, amount, hp, source }` … `playerId` は城の持ち主。`amount` は与えたダメージ（兵士は攻撃力 × `soldierCastleDamageMultiplier`、魔法は値そのまま）（`hp` は0未満にならない）。`source` は `{ kind: "soldier", soldierId }` か `{ kind: "spell", type }` |
+| `castleDamaged` | `{ playerId, amount, blocked, hp, source }` … `playerId` は城の持ち主。`amount` は与えようとしたダメージ（兵士は攻撃力 × `soldierCastleDamageMultiplier`、魔法は値そのまま）（`hp` は0未満にならない）。`blocked` は城壁が受けた量（`hp` は城壁で減らしたあとの値）。`source` は `{ kind: "soldier", soldierId }` か `{ kind: "spell", type }` |
 | `castleHealed` | `{ playerId, amount, hp }` … `amount` は実際に増えた量（上限で止まったぶんは含まない） |
+| `weaponEquipped` | `{ playerId, soldierId, type, attack, element }` … 武器を持たせた。`attack` は持たせたあとの攻撃力 |
+| `shieldAdded` | `{ playerId, soldierId, amount, shield }` … `shield` は足したあとの盾 |
+| `castleArmored` | `{ playerId, armor }` … 城壁を置いた |
+| `armorExpired` | `{ playerId }` … 城壁が消えた（その人のターンの始め） |
+| `statusApplied` | `{ playerId, soldierId, status, turns }` … `status` は `"poison"` か `"frozen"` |
+| `statusCleared` | `{ playerId, soldierId, status }` |
 | `gameOver` | `{ winner }` |
 
 #### イベントの順番
@@ -250,11 +264,15 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   - 兵士同士が戦うとき：`soldierMoved`（止まった位置まで。動かなければ出さない）→ `soldiersClashed` → `soldierDamaged`（守る側）→ `soldierDamaged`（攻める側）→ HPが0以下の兵士の `soldierDestroyed`（`"killed"`）。両方消えるときは**守る側 → 攻める側**の順（`soldierDamaged` と同じ順番）
   - 戦いで相手だけが消えて進み続けるとき（`advanceAfterWin`）：上の戦いのイベントのあと、続きの `soldierMoved`（さっき止まったマスから）→（また相手に会えば）`soldiersClashed` …、城に着けば `castleDamaged` → `soldierDestroyed`（`"reachedCastle"`）。1体の兵士の `soldierMoved` が1回の進軍で2回以上出ることがある
   - 進軍の途中で城HPが0以下になったら、残りの兵士は動かさずにすぐ `gameOver` を出す
+- 進軍（STEP 2）：1体ずつ「毒の `soldierDamaged`（`cause: "poison"`）→（0なら `soldierDestroyed` で、動かない）→（凍結なら休んで、0回になったら `statusCleared`）→ 動く」
+- ターンの始めに城壁が残っていたら、`turnStarted` のすぐあと（ドローの前）に `armorExpired`
 - カードを出したとき：`cardPlayed` のあと
   - 兵士：`soldierDeployed`
   - ファイアボール：`spellCast` → `castleDamaged`
   - サンダー：`spellCast` → 相手の兵士1体ずつ `soldierDamaged` →（HPが0なら）`soldierDestroyed`（`"killed"`）
   - ヒール：`spellCast` → `castleHealed`
+  - 毒の霧・氷の息：`spellCast` → 相手の兵士1体ずつ `statusApplied`
+  - 武器：`weaponEquipped`／盾：`shieldAdded`／城壁：`castleArmored`
 - ターン終了：手札が上限を超えていたら `discardRequired`。捨てたら `cardDiscarded` → 次の人の `turnStarted` …
 - `gameOver` はいちばん最後に1回だけ出る。そのあとの操作はすべて `{ ok: false }`
 
@@ -272,7 +290,8 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   "maxHand": 8,
   "laneLength": 3,
   "advanceAfterWin": false,
-  "soldierCastleDamageMultiplier": 2
+  "soldierCastleDamageMultiplier": 2,
+  "elementBonus": 2
 }
 ```
 
@@ -284,10 +303,15 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   "knight":    { "name": "騎士", "kind": "soldier", "hp": 4, "attack": 5, "speed": 3, "count": 6 },
   "fireball":  { "name": "ファイアボール", "kind": "spell", "effect": "damageEnemyCastle", "amount": 8, "count": 4 },
   "thunder":   { "name": "サンダー", "kind": "spell", "effect": "damageEnemySoldiers", "amount": 3, "count": 6 },
-  "heal":      { "name": "ヒール", "kind": "spell", "effect": "healOwnCastle", "amount": 10, "count": 6, "exhaust": true }
+  "heal":      { "name": "ヒール", "kind": "spell", "effect": "healOwnCastle", "amount": 10, "count": 6, "exhaust": true },
+  "flameSword":  { "name": "炎の剣", "kind": "weapon", "attackBonus": 1, "element": "fire", "count": 2 },
+  "shield":      { "name": "盾", "kind": "defense", "effect": "shieldSoldier", "amount": 3, "count": 3 },
+  "poisonMist":  { "name": "毒の霧", "kind": "spell", "effect": "poisonEnemySoldiers", "amount": 1, "turns": 3, "count": 3 }
 }
 ```
 
+- `elementBonus`：属性が強いときに増えるダメージ（省略すると0）
+- カードの `kind`：`soldier` / `spell` / `weapon`（`attackBonus`、`element`）/ `defense`（`effect`: `shieldSoldier` / `armorCastle`、`amount`）。魔法の `effect` に `poisonEnemySoldiers`（`amount`, `turns`）と `freezeEnemySoldiers`（`turns`）が増えた。`element` は `fire` / `water` / `wood`
 - `secondPlayerCastleBonus`：後攻（p2）の城だけ、HPと上限がこのぶん多い（先攻有利をやわらげるため）。0以上の整数
 - `advanceAfterWin`：`true` なら、戦いで相手だけが消えたとき、残りの歩数で進み続ける（`false` ならそのターンはその場で止まる）。省略すると `false`
 - `soldierCastleDamageMultiplier`：城に着いた兵士が与えるダメージ ＝ 攻撃力 × この値（1以上の整数）。省略すると 1
@@ -375,7 +399,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 | `defense`（防御） | 防御（何枚でも） | `effect` による | 兵士に盾をつける・城を守る |
 
 - 「メイン」を出したかどうかは `playedThisTurn`。付加・防御は、メインを出す前でも後でも出せる
-- 付加・防御も、出しても何も起きないときは出せない（例：道の上に自分の兵士がいないときの武器）
+- 付加・防御も、出しても何も起きないときは出せない（例：道の上に自分の兵士がいないときの武器、同じ武器をもう持っている兵士、全員がもう同じ状態のときの毒の霧・氷の息、今と同じか強い城壁があるときの城壁）
 
 ### 属性
 - 属性は 火（`fire`）・水（`water`）・木（`wood`）の3つ。**水は火に強い、火は木に強い、木は水に強い**（じゃんけん）
@@ -386,7 +410,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 ### 状態異常
 | 状態 | どうなるか | 終わり方 |
 |---|---|---|
-| 毒（`poison`） | 持ち主のターンの進軍の前に、`amount` ダメージ | `turns` 回ダメージを受けたら治る |
+| 毒（`poison`） | 持ち主のターンの進軍の前に、`amount` ダメージ。**盾は効かない** | `turns` 回ダメージを受けたら治る（最後の1回で消えた兵士には `statusCleared` は出ない） |
 | 凍結（`frozen`） | 次の進軍で動かない（戦いも起こさない）。相手から攻められたら戦う | 進軍を1回休んだら治る |
 
 - 同じ状態がもう一度かかったら、残りの回数を長い方にそろえる（重ねがけで増えない）
@@ -402,7 +426,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
   - 付加・防御を出せば、そのぶん手札が減る。これが付加・防御を出すときの代わり（コスト）になる（レビューで決めた）
 
 ### STEP 2 のカード（仮）
-実装のPRで、シミュレーションを回して枚数と数値を決め、この表を直す。
+枚数：炎の剣・水の槍・木の斧 各2、盾・城壁・毒の霧・氷の息 各3（山札は32 → 50枚）。
 
 | 名前（type） | 種類 | 効果 | 長所 | 短所 |
 |---|---|---|---|---|
@@ -410,8 +434,8 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 | 水の槍（`waterSpear`） | 武器・水 | 攻撃+1、水 | 火の兵士に強い | 木の武器に返される |
 | 木の斧（`woodAxe`） | 武器・木 | 攻撃+1、木 | 水の兵士に強い | 火の武器に返される |
 | 盾（`shield`） | 防御 | 兵士に盾3 | 何枚でも重なる。兵士が城まで届きやすくなる | 城は守れない。攻撃力は上がらない |
-| 城壁（`wall`） | 防御 | 自分の城を5守る（次の自分のターンまで） | ファイアボールも兵士も止める | 1ターンで消える。重ならない |
-| 毒の霧（`poisonMist`） | 魔法（メイン） | 相手1人の兵士全員に毒（1ダメージ×3回） | サンダーより合計のダメージが大きい | すぐには効かない。その間に城に着かれることがある |
+| 城壁（`wall`） | 防御 | 自分の城を5守る（次の自分のターンまで）。**使い切り** | ファイアボールも兵士も止める | 1ターンで消える。重ならない。1試合に3回まで |
+| 毒の霧（`poisonMist`） | 魔法（メイン） | 相手1人の兵士全員に毒（1ダメージ×4回） | サンダー（3）より合計のダメージが大きく（4）、盾が効かない | すぐには効かない。その間に城に着かれることがある |
 | 氷の息（`frostBreath`） | 魔法（メイン） | 相手1人の兵士全員を凍結（1回休み） | 城の前まで来た兵士を1ターン止められる | ダメージがない。メインを使う |
 
 ### ロジックとUIの約束に足すもの（STEP 2）
@@ -510,7 +534,7 @@ STEP 2 以降で作り直しにならないよう、Game をどう広げるか�
 - `canPlayCard(cardId, target)` も同じ `target` を受け取る。`target` を省略して、対象が2つ以上あるときは `{ ok: true, needsTarget: true }`（出せるけど選ぶ必要がある）。そのまま `playCard(cardId)` を呼ぶと `{ ok: false, reason: "対象を選んでください", needsTarget: true }`
 
 ### 1ターンに出せる枚数（STEP 2 から）
-- カードは `cards.json` の `slot` で3つに分かれる
+- カードは `kind` から決まる `slot` で3つに分かれる（`cards.json` に `slot` は書かない）
   - `"main"`（メイン）：1ターン1枚。兵士・城や兵士を攻める魔法・**ヒール**（回復が何枚も重なって決着しなくならないように、メインにする）
   - `"addon"`（付加）：自分の兵士につける（武器など）。メインと一緒に、何枚でも出せる。**その兵士の次の進軍・戦いから効く**。「この攻撃にこの付加をつける」形にはせず、兵士につける形にする（1枚ずつ `playCard` で出せて、画面も「兵士をタップ」だけで分かるため）
   - `"defense"`（防御）：何枚でも出せる（兵士の盾・城の守り）

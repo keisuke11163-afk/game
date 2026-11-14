@@ -1,7 +1,14 @@
 {
-  "infantry":  { "name": "歩兵", "kind": "soldier", "hp": 5, "attack": 3, "speed": 2, "count": 10 },
-  "knight":    { "name": "騎士", "kind": "soldier", "hp": 4, "attack": 5, "speed": 3, "count": 6 },
-  "fireball":  { "name": "ファイアボール", "kind": "spell", "effect": "damageEnemyCastle", "amount": 8, "count": 4 },
-  "thunder":   { "name": "サンダー", "kind": "spell", "effect": "damageEnemySoldiers", "amount": 3, "count": 6 },
-  "heal":      { "name": "ヒール", "kind": "spell", "effect": "healOwnCastle", "amount": 10, "count": 6, "exhaust": true }
+  "infantry":    { "name": "歩兵", "kind": "soldier", "hp": 5, "attack": 3, "speed": 2, "count": 10 },
+  "knight":      { "name": "騎士", "kind": "soldier", "hp": 4, "attack": 5, "speed": 3, "count": 6 },
+  "fireball":    { "name": "ファイアボール", "kind": "spell", "effect": "damageEnemyCastle", "amount": 8, "count": 4 },
+  "thunder":     { "name": "サンダー", "kind": "spell", "effect": "damageEnemySoldiers", "amount": 3, "count": 6 },
+  "heal":        { "name": "ヒール", "kind": "spell", "effect": "healOwnCastle", "amount": 10, "count": 6, "exhaust": true },
+  "flameSword":  { "name": "炎の剣", "kind": "weapon", "attackBonus": 1, "element": "fire", "count": 2 },
+  "waterSpear":  { "name": "水の槍", "kind": "weapon", "attackBonus": 1, "element": "water", "count": 2 },
+  "woodAxe":     { "name": "木の斧", "kind": "weapon", "attackBonus": 1, "element": "wood", "count": 2 },
+  "shield":      { "name": "盾", "kind": "defense", "effect": "shieldSoldier", "amount": 3, "count": 3 },
+  "wall":        { "name": "城壁", "kind": "defense", "effect": "armorCastle", "amount": 5, "count": 3, "exhaust": true },
+  "poisonMist":  { "name": "毒の霧", "kind": "spell", "effect": "poisonEnemySoldiers", "amount": 1, "turns": 4, "count": 3 },
+  "frostBreath": { "name": "氷の息", "kind": "spell", "effect": "freezeEnemySoldiers", "turns": 1, "count": 3 }
 }

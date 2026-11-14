@@ -80,7 +80,7 @@ test('1ターンに2枚は出せない。相手の番には出せない', () => 
   assert.equal(play(game, 'infantry').ok, true);
   const second = game.canPlayCard(handId(game, 'p1', 'infantry'));
   assert.equal(second.ok, false);
-  assert.equal(second.reason, 'このターンはもうカードを出しました');
+  assert.equal(second.reason, 'このターンはもうメインのカードを出しました');
   const p2card = game.getState('p2').players.p2.hand[0].cardId;
   assert.equal(game.playCard(p2card).reason, 'あなたの番ではありません');
 });

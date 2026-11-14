@@ -16,9 +16,24 @@ export class Soldier {
     this.targetId = targetId;
     this.type = card.type;
     this.hp = card.def.hp;
-    this.attack = card.def.attack;
+    this.baseAttack = card.def.attack;
     this.speed = card.def.speed;
     this.position = 0;
+    /** 持っている武器のカード種類（なければ null） */
+    this.weapon = null;
+    this.weaponBonus = 0;
+    /** 属性（武器でつく。なければ null） */
+    this.element = null;
+    /** 盾の残り。ダメージは先に盾が受ける */
+    this.shield = 0;
+    /** 毒 { amount, turns }（なければ null） */
+    this.poison = null;
+    /** 凍結の残り回数（0 なら凍結していない） */
+    this.frozen = 0;
+  }
+
+  get attack() {
+    return this.baseAttack + this.weaponBonus;
   }
 
   /** 1マス進む */
@@ -30,9 +45,15 @@ export class Soldier {
     return this.position >= laneLength;
   }
 
-  /** ダメージを受ける。HPは0未満にしない */
-  takeDamage(amount) {
-    this.hp = Math.max(0, this.hp - amount);
+  /**
+   * ダメージを受ける。盾が先に受ける（ignoreShield なら盾を使わない）。HPは0未満にしない
+   * @returns {number} 盾が受けた量
+   */
+  takeDamage(amount, { ignoreShield = false } = {}) {
+    const blocked = ignoreShield ? 0 : Math.min(this.shield, amount);
+    this.shield -= blocked;
+    this.hp = Math.max(0, this.hp - (amount - blocked));
+    return blocked;
   }
 
   get isDead() {
@@ -48,6 +69,10 @@ export class Soldier {
       position: this.position,
       roadId: this.roadId,
       targetId: this.targetId,
+      weapon: this.weapon,
+      element: this.element,
+      shield: this.shield,
+      statuses: { poison: this.poison ? { ...this.poison } : null, frozen: this.frozen },
     };
   }
 }

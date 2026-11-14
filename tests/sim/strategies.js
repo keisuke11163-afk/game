@@ -15,16 +15,57 @@ function view(game, pid) {
 }
 
 
+/** 対象を選んで出す。chooseTarget を省略すると最初の対象 */
+function playWith(game, cardId, chooseTarget) {
+  const targets = game.getTargets(cardId);
+  if (targets.length === 0) return false;
+  const t = chooseTarget ? chooseTarget(targets) : targets[0];
+  return t ? game.playCard(cardId, t).ok : false;
+}
+
 /** 種類の優先順に、出せる最初のカードを出す */
 function playFirst(game, playable, typesInOrder) {
   for (const t of typesInOrder) {
     const c = playable.find((x) => x.type === t);
-    if (c) {
-      const r = game.playCard(c.cardId);
-      if (r.ok) return true;
-    }
+    if (c && playWith(game, c.cardId)) return true;
   }
   return false;
+}
+
+const ELEMENT_BEATS = { water: 'fire', fire: 'wood', wood: 'water' };
+
+/**
+ * メイン以外（付加・防御）のカードを、役に立つときに出す（ほどよく考える戦い方で使う）
+ *   武器：まだ武器のない、いちばん前の兵士に。近くの相手の属性に強い属性を選ぶ
+ *   盾：いちばん前の兵士に
+ *   城壁：城HPが半分以下のときだけ（使い切りで、手札も1枚減るため）
+ */
+function playSupports(game, pid, ctx) {
+  for (let guard = 0; guard < 20; guard++) {
+    const { me, enemies, playable } = view(game, pid);
+    const support = playable.filter((c) => ctx.cards[c.type].kind !== 'soldier' && ctx.cards[c.type].kind !== 'spell');
+    if (support.length === 0) return;
+    const front = [...me.soldiers].sort((a, b) => b.position - a.position);
+    const enemySoldiers = enemies.flatMap((e) => e.soldiers);
+    let played = false;
+    for (const c of support) {
+      const def = ctx.cards[c.type];
+      if (def.kind === 'weapon') {
+        const nearElements = new Set(enemySoldiers.map((s) => s.element).filter(Boolean));
+        // 近くの相手の属性に負ける属性は避ける
+        const bad = [...nearElements].some((e) => ELEMENT_BEATS[e] === def.element);
+        const target = front.find((s) => !s.weapon);
+        if (!bad && target) played = playWith(game, c.cardId, (ts) => ts.find((t) => t.soldierId === target.soldierId));
+      } else if (def.effect === 'shieldSoldier') {
+        if (front.length) played = playWith(game, c.cardId, (ts) => ts.find((t) => t.soldierId === front[0].soldierId));
+      } else if (def.effect === 'armorCastle') {
+        // 城壁は使い切りで手札も1枚減るので、城HPが半分以下のときだけ出す
+        if (me.castleHp * 2 <= me.castleMaxHp) played = playWith(game, c.cardId);
+      }
+      if (played) break;
+    }
+    if (!played) return;
+  }
 }
 
 function randomDiscard(game, pid, rng, ctx) {
@@ -48,8 +89,14 @@ export const STRATEGIES = {
   /** 出せるカードからランダムに1枚 */
   random: {
     takeTurn(game, pid, rng) {
-      const { playable } = view(game, pid);
-      if (playable.length) game.playCard(pick(playable, rng).cardId);
+      // 出せるカードからランダムに出す。メインを出したら、あとは半分の確率で続ける
+      for (let i = 0; i < 10; i++) {
+        const { playable } = view(game, pid);
+        if (!playable.length) return;
+        const c = pick(playable, rng);
+        playWith(game, c.cardId, (ts) => pick(ts, rng));
+        if (game.getState(pid).players[pid].playedThisTurn && rng() < 0.5) return;
+      }
     },
     chooseDiscard: randomDiscard,
   },
@@ -67,6 +114,7 @@ export const STRATEGIES = {
   smart: {
     takeTurn(game, pid, rng, ctx) {
       smartTurn(game, pid, ctx);
+      playSupports(game, pid, ctx);
     },
     chooseDiscard: randomDiscard,
   },
@@ -75,7 +123,9 @@ export const STRATEGIES = {
   defensive: {
     takeTurn(game, pid, rng, ctx) {
       const { playable } = view(game, pid);
-      playFirst(game, playable, [
+      playSupports(game, pid, ctx);
+      const after = view(game, pid).playable;
+      playFirst(game, after, [
         ...typesWithEffect(ctx, 'healOwnCastle'),
         ...typesWithEffect(ctx, 'damageEnemySoldiers'),
         ...soldierTypes(ctx),
@@ -97,8 +147,8 @@ export const STRATEGIES = {
       const { playable, enemies } = view(game, pid);
       const L = ctx.rules.laneLength;
       const near = enemies.some((e) => e.soldiers.some((s) => s.position >= L - 3));
-      if (near && playFirst(game, playable, soldierTypes(ctx))) return;
-      smartTurn(game, pid, ctx);
+      if (!(near && playFirst(game, playable, soldierTypes(ctx)))) smartTurn(game, pid, ctx);
+      playSupports(game, pid, ctx);
     },
     chooseDiscard: randomDiscard,
   },
@@ -114,6 +164,11 @@ function smartTurn(game, pid, ctx) {
   }
   if (me.castleHp < me.castleMaxHp / 2 && playFirst(game, playable, typesWithEffect(ctx, 'healOwnCastle'))) return;
   if (enemy && enemy.soldiers.length >= 2 && playFirst(game, playable, typesWithEffect(ctx, 'damageEnemySoldiers'))) return;
+  // 次の進軍で城に着きそうな相手の兵士がいれば、凍結で止める
+  const L = ctx.rules.laneLength;
+  const threat = enemy && enemy.soldiers.some((s) => s.position + ctx.cards[s.type].speed >= L);
+  if (threat && playFirst(game, playable, typesWithEffect(ctx, 'freezeEnemySoldiers'))) return;
+  if (enemy && enemy.soldiers.length >= 2 && playFirst(game, playable, typesWithEffect(ctx, 'poisonEnemySoldiers'))) return;
   playFirst(game, playable, [
     ...soldierTypes(ctx),
     ...castleSpells,
