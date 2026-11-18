@@ -6,6 +6,7 @@
 //       … data/ の値を一部だけ上書きして試す（cards はカードごとに中身をまぜる）
 //   node tests/sim/run.js --json                … 結果を JSON で出す
 //   node tests/sim/run.js --no-monsters         … 魔物と強化なしで回す
+//   node tests/sim/run.js --set japan           … 日本バージョン（data/japan/）のカード・妖怪・城・デッキで回す
 // 同じ引数なら、誰が回しても同じ結果になる。
 import { buildData, loadOptionalData } from '../helpers.js';
 import { runMany } from './sim.js';
@@ -38,8 +39,9 @@ const DEFAULT_MATCHES = [
 ];
 
 const matches = opt('match', null) ? [opt('match')] : DEFAULT_MATCHES;
-const { rules, cards } = buildData({ rules: rulesPatch, cards: cardsPatch });
-const gameOptions = args.includes('--no-monsters') ? {} : loadOptionalData();
+const set = opt('set', null);
+const { rules, cards } = buildData({ rules: rulesPatch, cards: cardsPatch, set });
+const gameOptions = args.includes('--no-monsters') ? {} : loadOptionalData(set);
 const rows = matches.map((m) => runMany({ games, seed, cards, rules, gameOptions, strategies: m.split(',') }));
 
 if (args.includes('--json')) {

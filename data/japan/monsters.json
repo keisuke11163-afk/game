@@ -1,0 +1,118 @@
+{
+  "kappa": {
+    "name": "河童",
+    "hp": 4,
+    "attack": 1,
+    "element": "water",
+    "castleAttack": 2,
+    "attackEvery": 3,
+    "weight": 5,
+    "rewardRarity": "common"
+  },
+  "tengu": {
+    "name": "天狗",
+    "hp": 7,
+    "attack": 3,
+    "element": "wind",
+    "castleAttack": 3,
+    "attackEvery": 2,
+    "weight": 3,
+    "rewardRarity": "uncommon"
+  },
+  "orochi": {
+    "name": "大蛇",
+    "hp": 12,
+    "attack": 5,
+    "element": "fire",
+    "castleAttack": 5,
+    "attackEvery": 2,
+    "weight": 1,
+    "rewardRarity": "epic"
+  },
+  "ittanmomen": {
+    "name": "一反木綿",
+    "hp": 3,
+    "attack": 2,
+    "castleAttack": 1,
+    "attackEvery": 2,
+    "weight": 4,
+    "rewardRarity": "common"
+  },
+  "gashadokuro": {
+    "name": "がしゃどくろ",
+    "hp": 6,
+    "attack": 3,
+    "castleAttack": 2,
+    "attackEvery": 2,
+    "weight": 3,
+    "rewardRarity": "uncommon"
+  },
+  "nurikabe": {
+    "name": "ぬりかべ",
+    "hp": 14,
+    "attack": 2,
+    "element": "earth",
+    "castleAttack": 3,
+    "attackEvery": 4,
+    "weight": 2,
+    "rewardRarity": "rare"
+  },
+  "oni": {
+    "name": "鬼",
+    "hp": 10,
+    "attack": 4,
+    "element": "fire",
+    "castleAttack": 4,
+    "attackEvery": 2,
+    "weight": 1,
+    "rewardRarity": "rare"
+  },
+  "chochinObake": {
+    "name": "提灯お化け",
+    "hp": 5,
+    "attack": 3,
+    "rewardRarity": "uncommon",
+    "castleAttack": 2,
+    "attackEvery": 2,
+    "weight": 3
+  },
+  "kodama": {
+    "name": "木霊",
+    "hp": 9,
+    "attack": 2,
+    "element": "earth",
+    "rewardRarity": "uncommon",
+    "castleAttack": 2,
+    "attackEvery": 3,
+    "weight": 3
+  },
+  "bakeTsuzura": {
+    "name": "化け葛籠",
+    "hp": 8,
+    "attack": 1,
+    "rewardRarity": "rare",
+    "castleAttack": 1,
+    "attackEvery": 4,
+    "weight": 2
+  },
+  "nureOnna": {
+    "name": "濡れ女",
+    "hp": 11,
+    "attack": 4,
+    "element": "water",
+    "rewardRarity": "epic",
+    "castleAttack": 4,
+    "attackEvery": 2,
+    "weight": 1
+  },
+  "shutenDoji": {
+    "name": "酒呑童子",
+    "hp": 20,
+    "attack": 6,
+    "element": "fire",
+    "rewardRarity": "legendary",
+    "castleAttack": 6,
+    "attackEvery": 2,
+    "weight": 1
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "standard": { "name": "大坂城" },
+  "fortress": { "name": "熊本城", "hpBonus": 2, "maxHandBonus": -2 },
+  "tower":    { "name": "姫路城", "hpBonus": -6, "castleSpellBonus": 2 },
+  "barracks": { "name": "名古屋城", "hpBonus": -12, "soldierAttackBonus": 1 }
+}

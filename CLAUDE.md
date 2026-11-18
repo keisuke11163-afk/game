@@ -130,6 +130,7 @@ data/
   upgrades.json    … コインで買う強化（STEP 3）
   weather.json     … 天候（晴れ・雨・大雨・霧・嵐・砂嵐・コインの雨）
   stamps.json      … チャットのスタンプの一覧
+  japan/           … 日本バージョン（cards・monsters・castles・decks。ほかは上と共有）
 ui-tests/          … 画面のスモークテスト（node ui-tests/smoke.js。Playwright は環境にあるものを使う。UI担当）
 docs/              … 設計メモ。archive/ は終わった依頼（Codex 向けのプロンプトなど）
 tests/             … 自動テスト（node --test）。Node.js だけで動く
@@ -1164,6 +1165,32 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 - **イベント**：忍者に関わるイベント（`soldierDeployed` / `soldierMoved` / `soldierDamaged` / `soldierDestroyed` / `statusApplied` / `statusCleared` / `weaponEquipped` / `shieldAdded` / `soldierBuffed` / `monsterClashed`）には、持ち主の陣地 `stealth`（例：`"p1"`）が付く。`filterEventFor(type, payload, viewerId, viewerSide)`（`js/game/visibility.js`）は、`stealth` がその人の陣地でなければ `null`（送らない）を返す。サーバーは `null` のイベントを送らない。**城・魔物へのダメージ（`castleDamaged` / `monsterDamaged`）と、カードを出したこと（`cardPlayed`）は見える**（「忍者を出した」ことは分かるが、どこにいるかは分からない）
 - 画面（ひとりで遊ぶ・同じ端末）は、オンラインと同じく、見ている人の陣地で `stealth` のイベントを飛ばす（UI担当。日本バージョンの画面のPRで入れる）
 - 確かめたこと：`tests/ninja.test.js`（見えない・すり抜け・弓兵に撃たれない・魔法の的にならない・魔物には止められる・イベントを隠す）。西洋版のシミュレーションは変わらない（忍者がいないため）
+
+## 日本バージョン（`data/japan/`。人間の指示。仮）
+
+タイトルで切り替える、和風の版。**カードは全部日本専用**（西洋版とは混ぜない）。城は日本の城、魔物は妖怪、魔法は妖術、魔法使いは呪術師、兵士は足軽・侍・将軍など、**忍者**（上の「忍者」の節）もいる。**数値はすべて仮**。
+
+- **データ**：`data/japan/` に `cards.json`（110枚）・`monsters.json`（妖怪12体）・`castles.json`・`decks.json`。ほかの `rules.json`・`upgrades.json`・`rarities.json`・`weather.json`・`stamps.json` は西洋版と共有（Game は渡されたデータを使うだけなので、ロジックは同じ）
+- **カード**：西洋版の系統ごとに、和風の新しいカードを置いた（数値は、調整ずみの西洋版を出発点にした）。忍者の系統（忍者見習い→下忍→中忍→上忍→頭領）を足した
+
+| 系統 | コモン → … → レジェンド |
+|---|---|
+| 兵士 | 足軽 → 槍足軽 → 侍 → 侍大将 → 将軍 |
+| 騎馬 | 早馬 → 騎馬武者 → 赤備え → 無双の騎将 → 龍神騎 |
+| 弓 | 弓足軽 → 弓取り → 鉄砲足軽 → 鉄砲隊 → 扇の射手 |
+| 呪術師 | 見習い呪術師 → 呪術師 → 陰陽師 → 大陰陽師 → 天文博士 |
+| 忍者（`role: "ninja"`） | 忍者見習い 2/2/3 → 下忍 3/3/3 → 中忍 3/4/4 → 上忍 4/5/4 → 頭領 5/7/5（HP/攻撃/速さ。見えない・すり抜けるぶん低め） |
+| 妖術（城攻め・対兵士・回復・毒・氷） | 狐火→鬼火→火車→焦熱地獄→八岐の業火／雷鳴→落雷→雷獣→雷神の太鼓→天変地異／薬草→お札の祈り→社の加護→神楽→天照の光／毒霧→蛇毒→瘴気→呪詛→祟り／雪女の息→吹雪→氷柱→雪崩→永久凍土 |
+| 武器・守り | 焔の太刀・水流の槍・疾風の弓・金棒 → 打刀 → 妖刀 → 名刀 → 草薙の剣／竹束 → 置き盾 → 鉄の鎧 → 御守り → 八咫の鏡／土塁 → 馬防柵 → 石垣 → 大手門 → 結界 |
+| 特殊・式神・お金・霊力 | 願掛け → おみくじ → 鼠小僧 → 変わり身の術 → 鏡返し／火・水・風・土の式神 → 大式神 → 朱雀・玄武・青龍・白虎／銭袋 → 小判 → 千両箱 → 金山 → 天下の黄金／霊力のかけら → 霊水のしずく → 霊石 → 霊泉 → 御神木のしずく／変化の葉（適応）・毒消し・雨乞い（天候） |
+
+- **妖怪**：河童・一反木綿・天狗・がしゃどくろ・ぬりかべ・鬼・提灯お化け・木霊・化け葛籠・濡れ女・大蛇・酒呑童子（数値は西洋版の魔物と同じ。倒すと駒 `beast_<種類>` が手札に入る）
+- **城**：大坂城（ふつう）・熊本城（とりで）・姫路城（魔法の塔）・名古屋城（兵舎）。キーは西洋版と同じ（`standard` など）なので、`rules.defaultCastle` も共有
+- **見本のデッキ**：キーは西洋版と同じ（`costBalance` など）。早馬の代わりに忍者見習いを入れた
+- **オンライン**：`server/server.js` の `loadData()` が `data/japan/` も読み、`editions.japan` に入れる。部屋の `setRules` に `edition`（`"western"` / `"japan"`。部屋主だけ）。変えると、席のデッキは新しい版の見本に戻る（マイデッキは外れる）。`room` の `settings.edition`・`choices.editions`
+- **シミュレーション**：`node tests/sim/run.js --set japan`・`node tests/sim/costdecks.js --set japan`（`tests/helpers.js` の `loadJson(name, set)`）
+- 確かめたこと：`tests/japan.test.js`（読める・西洋版と混ざっていない・合成の行き先・妖怪の駒・デッキ）、`tests/lobby.test.js`（部屋で版を選ぶ）。`node tests/sim/run.js --games 300 --set japan`：全組み合わせが決着。smart 同士は平均24.7手番（西洋版27.7。忍者が止められないぶん少し短い）・p1 勝率53%。smart vs random 89%。`costdecks.js --set japan --games 250`：バランス対籠城49%・突撃対バランス53%・突撃対籠城50%。**試合が短い件（review-queue）は日本版にも当てはまる**
+- 画面（UI担当）：タイトルでの切り替え、和風の言葉（魔法→妖術・魔物→妖怪など）、日本の城・妖怪・カードの絵（はじめは仮の絵）。画面のPRで入れる
 
 ## 全体の設計（STEP 2〜5 の見通し）
 

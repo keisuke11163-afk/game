@@ -56,7 +56,7 @@ test('部屋主：最初に入った人。モードは部屋主だけが選べ�
   assert.equal(a.room.action(a.seat, 'setRules', [{ winCondition: 'nope' }]).ok, false);
   assert.equal(a.room.action(a.seat, 'setRules', [{ castleMaxHp: 1 }]).ok, false);
   assert.equal(a.room.action(a.seat, 'setRules', [{ winCondition: 'lastStanding', deckMode: 'own' }]).ok, true);
-  assert.deepEqual(b.lastRoom().settings, { winCondition: 'lastStanding', deckMode: 'own', teams: 'off' });
+  assert.deepEqual(b.lastRoom().settings, { winCondition: 'lastStanding', deckMode: 'own', teams: 'off', edition: 'western' });
   const ids = (list) => list.map((x) => x.id);
   assert.deepEqual(ids(b.lastRoom().choices.winConditions), ['firstDestroy', 'lastStanding']);
   assert.deepEqual(ids(b.lastRoom().choices.deckModes), ['shared', 'own', 'cost']);
@@ -232,4 +232,30 @@ test('チーム：各自で選ぶ。CPU は部屋主が選び、1チームしか
   assert.equal(a.room.action(a.seat, 'start', []).ok, true);
   assert.deepEqual(Object.keys(a.room.game.getState(null).teams), ['t1', 't3', 't4']);
   playOut(a.room);
+});
+
+test('版（日本バージョン）：部屋主が選ぶと、部屋の全員が日本のカード・城・デッキで遊ぶ。西洋のマイデッキは外れる', () => {
+  const lobby = newLobby();
+  const host = enter(lobby, 'japan-room', 'あお');
+  const guest = enter(lobby, 'japan-room', 'だいだい');
+  assert.deepEqual(host.lastRoom().choices.editions.map((e) => e.id), ['western', 'japan']);
+  assert.equal(guest.room.action(guest.seat, 'setRules', [{ edition: 'japan' }]).ok, false, '部屋主だけ');
+  assert.equal(host.room.action(host.seat, 'setRules', [{ edition: 'mars' }]).ok, false);
+  assert.equal(host.room.action(host.seat, 'setRules', [{ edition: 'japan' }]).ok, true);
+  const room = host.lastRoom();
+  assert.equal(room.settings.edition, 'japan');
+  assert.equal(room.choices.castles.find((c) => c.id === 'standard').name, '大坂城');
+  assert.ok(room.choices.costDecks.length > 0);
+  // 日本のカードでマイデッキを送れる（西洋のカードは断る）
+  const japan = loadData().editions.japan;
+  assert.equal(host.room.action(host.seat, 'setSeat', [{ deckList: { ...japan.decks.costBalance.cards } }]).ok, true);
+  assert.equal(host.room.action(host.seat, 'setSeat', [{ deckList: { ...loadData().decks.costBalance.cards } }]).ok, false);
+  assert.equal(host.room.action(host.seat, 'start', []).ok, true);
+  const hand = host.room.game.getState(host.seat.playerId).players[host.seat.playerId].hand;
+  assert.ok(hand.every((c) => c.type in japan.cards), '日本のカードだけ');
+  // 西洋に戻すと、席のマイデッキは外れて見本に戻る
+  playOut(host.room);
+  assert.equal(host.room.action(host.seat, 'backToRoom', []).ok, true);
+  assert.equal(host.room.action(host.seat, 'setRules', [{ edition: 'western' }]).ok, true);
+  assert.equal(host.seat.deckList, null);
 });

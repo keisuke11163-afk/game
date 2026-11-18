@@ -13,6 +13,7 @@ import { checkCostDeck } from '../js/game/Setup.js';
 /** 試合中の操作（Game のメソッドに渡す） */
 const GAME_ACTIONS = ['playCard', 'discard', 'endTurn', 'buyUpgrade', 'fuse', 'defend', 'passDefense'];
 /** 部屋の操作（いつでも送れる。だめなときは理由を返す） */
+const EDITION_NAMES = { japan: '日本' };
 const ROOM_ACTIONS = ['rematch', 'surrender', 'leave', 'start', 'setRules', 'setSeat', 'addCpu', 'removeCpu', 'backToRoom', 'chat'];
 const ACTIONS = [...GAME_ACTIONS, ...ROOM_ACTIONS];
 /** 攻撃を受けた人（自分の番でなくても）が送れる操作 */
@@ -63,7 +64,8 @@ export class Room {
    */
   constructor(roomId, data, makeRng, { cpuDelayMs = 700 } = {}) {
     this.roomId = roomId;
-    this.data = data;
+    /** 西洋版のデータ。日本バージョンは baseData.editions.japan（部屋主が settings.edition で選ぶ） */
+    this.baseData = data;
     this.makeRng = makeRng;
     this.cpuDelayMs = cpuDelayMs;
     this.capacity = MAX_SEATS;
@@ -81,6 +83,7 @@ export class Room {
       deckMode: data.rarities && Object.values(data.decks ?? {}).some((d) => d.costDeck) ? 'cost'
         : Object.hasOwn(DECK_MODES, data.rules.deckMode) ? data.rules.deckMode : 'shared',
       teams: 'off',
+      edition: 'western',
     };
     this.game = null;
     /** 今の試合のチーム（席ごと。チームなしなら null） */
@@ -93,6 +96,11 @@ export class Room {
     /** チャットの履歴（新しくつないだ人に送る）。席そのものを持つので、席が詰まって playerId が変わっても送るときに引き直せる */
     this.chatLog = [];
     this.chatCount = 0;
+  }
+
+  /** 今の版（西洋・日本）のデータ */
+  get data() {
+    return this.settings?.edition !== 'western' ? this.baseData.editions?.[this.settings.edition] ?? this.baseData : this.baseData;
   }
 
   get started() {
@@ -384,6 +392,10 @@ export class Room {
       } else if (key === 'teams') {
         if (!Object.hasOwn(TEAM_MODES, value)) return { ok: false, reason: 'そのチームの分け方はありません' };
         next.teams = value;
+      } else if (key === 'edition') {
+        // 版（西洋・日本）。カードを混ぜないので、席のデッキは新しい版の見本に戻す
+        if (value !== 'western' && !this.baseData.editions?.[value]) return { ok: false, reason: 'その版はありません' };
+        next.edition = value;
       } else if (key === 'deckMode') {
         if (!Object.hasOwn(DECK_MODES, value)) return { ok: false, reason: 'その山札の形はありません' };
         if (value === 'own' && !this.data.decks) return { ok: false, reason: 'デッキがないので、1人1つのデッキは選べません' };
@@ -393,7 +405,16 @@ export class Room {
         return { ok: false, reason: `「${key}」は変えられません` };
       }
     }
+    const editionChanged = next.edition !== this.settings.edition;
     this.settings = next;
+    if (editionChanged) {
+      for (const s of this.seats) {
+        s.castle = this.data.castles ? this.defaultOf(this.data.castles, this.data.rules.defaultCastle) : null;
+        s.deck = this.data.decks ? this.defaultOf(this.plainDecks(), this.data.rules.defaultDeck) : null;
+        s.costDeck = this.costDecks() ? this.defaultOf(this.costDecks(), this.data.rules.defaultCostDeck) : null;
+        s.deckList = null;
+      }
+    }
     this.broadcastRoom();
     return { ok: true };
   }
@@ -701,6 +722,7 @@ export class Room {
         costDecks: Object.entries(this.costDecks() ?? {}).map(([id, d]) => ({ id, name: d.name ?? id })),
         cpuLevels: Object.entries(CPU_LEVELS).map(([id, d]) => ({ id, name: d.name })),
         teamModes: Object.entries(TEAM_MODES).map(([id, name]) => ({ id, name })),
+        editions: [{ id: 'western', name: '西洋' }, ...Object.keys(this.baseData.editions ?? {}).map((id) => ({ id, name: EDITION_NAMES[id] ?? id }))],
         teams: TEAM_IDS.map((id) => ({ id, name: TEAM_NAMES[id] })),
       },
       rematchVotes: [...this.rematchVotes],

@@ -1,13 +1,17 @@
 // テスト用の共通部品。Node.js だけで動く（外部パッケージなし）。
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** data/ の JSON を読む（毎回新しいオブジェクトを返すので、書き換えても他のテストに影響しない） */
-export function loadJson(name) {
-  return JSON.parse(readFileSync(join(ROOT, 'data', name), 'utf8'));
+/**
+ * data/ の JSON を読む（毎回新しいオブジェクトを返すので、書き換えても他のテストに影響しない）。
+ * set に "japan" を渡すと、data/japan/ にあるファイルはそちらを読む（ないものは data/ と共有）
+ */
+export function loadJson(name, set = null) {
+  const own = set ? join(ROOT, 'data', set, name) : null;
+  return JSON.parse(readFileSync(own && existsSync(own) ? own : join(ROOT, 'data', name), 'utf8'));
 }
 
 /** tests/fixtures/ の固定データを読む（data/ の調整でテストが落ちないように） */
@@ -20,8 +24,8 @@ export function loadFixture(name) {
  * cards はカードごとに中身をまぜる（null を渡したカードは消す）。
  * @param {{rules?: object, cards?: object, source?: 'data' | 'fixture'}} [patch]
  */
-export function buildData({ rules: rulesPatch = {}, cards: cardsPatch = {}, source = 'data' } = {}) {
-  const load = source === 'fixture' ? loadFixture : loadJson;
+export function buildData({ rules: rulesPatch = {}, cards: cardsPatch = {}, source = 'data', set = null } = {}) {
+  const load = source === 'fixture' ? loadFixture : (name) => loadJson(name, set);
   const rules = { ...load('rules.json'), ...rulesPatch };
   const cards = load('cards.json');
   for (const [k, v] of Object.entries(cardsPatch)) {
@@ -32,10 +36,10 @@ export function buildData({ rules: rulesPatch = {}, cards: cardsPatch = {}, sour
 }
 
 /** data/ の魔物と強化（STEP 3）。ファイルがなければ null */
-export function loadOptionalData() {
+export function loadOptionalData(set = null) {
   const read = (name) => {
     try {
-      return loadJson(name);
+      return loadJson(name, set);
     } catch {
       return null;
     }

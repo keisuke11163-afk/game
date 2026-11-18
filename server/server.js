@@ -23,6 +23,19 @@ export function loadData(dir = join(ROOT, 'data')) {
     rarities: optional('rarities.json'),
     weather: optional('weather.json'),
     stamps: optional('stamps.json'),
+    // 日本バージョン（data/japan/ があるとき）：カード・妖怪・城・デッキだけ別。ルール・強化・天候・スタンプは共有
+    ...(dir === join(ROOT, 'data') && existsSync(join(dir, 'japan', 'cards.json')) ? { editions: { japan: loadEdition(join(dir, 'japan'), dir) } } : {}),
+  };
+}
+
+/** 版（日本バージョンなど）のデータ。その版のフォルダにあるファイルを使い、ないものは base と共有する */
+function loadEdition(dir, baseDir) {
+  const pick = (name) => (existsSync(join(dir, name)) ? join(dir, name) : join(baseDir, name));
+  const read = (name) => JSON.parse(readFileSync(pick(name), 'utf8'));
+  const optional = (name) => (existsSync(pick(name)) ? read(name) : null);
+  return {
+    cards: read('cards.json'), rules: read('rules.json'), monsters: optional('monsters.json'), upgrades: optional('upgrades.json'),
+    castles: optional('castles.json'), decks: optional('decks.json'), rarities: optional('rarities.json'), weather: optional('weather.json'), stamps: optional('stamps.json'),
   };
 }
 
@@ -87,6 +100,7 @@ function sendJson(res, status, body) {
 export function createGameServer({ data = loadData(), makeRng = () => Math.random, cpuDelayMs = 700 } = {}) {
   // data/ が間違っていたら、起動したときに分かるようにする（試合が始まってから落ちないように）
   new Game({ ...data, rng: makeRng() });
+  for (const edition of Object.values(data.editions ?? {})) new Game({ ...edition, rng: makeRng() });
   const lobby = new Lobby(data, makeRng, { cpuDelayMs });
   const sweeper = setInterval(() => lobby.sweep(30 * 60 * 1000), 60 * 1000);
   sweeper.unref();

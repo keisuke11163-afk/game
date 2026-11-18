@@ -4,8 +4,10 @@ import { runMany } from './sim.js';
 import { buildData, loadOptionalData } from '../helpers.js';
 
 const games = Number(process.argv[process.argv.indexOf('--games') + 1]) || 150;
-const { cards, rules } = buildData({ rules: { deckMode: 'cost' } });
-const opts = loadOptionalData();
+// --set japan で日本バージョンのデッキ
+const set = process.argv.includes('--set') ? process.argv[process.argv.indexOf('--set') + 1] : null;
+const { cards, rules } = buildData({ rules: { deckMode: 'cost' }, set });
+const opts = loadOptionalData(set);
 const ids = Object.keys(opts.decks).filter((id) => opts.decks[id].costDeck);
 console.log(`コスト制の見本（smart 同士・各 ${games * 2} 試合）。勝率は左のデッキの勝つ割合（目安 45〜55%）`);
 for (const a of ids) {
