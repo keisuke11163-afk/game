@@ -26,6 +26,10 @@ Playwrightのブラウザ配置を環境で変えている場合は `PLAYWRIGHT_
 
 `node ui-tests/weather.js` を実行する。390×844 と360×640で7種類の背景と画像、天候の説明と残り周回、警報の色、落雷、呪文で変わった天候と演出スキップを確かめる。2つ目のサイズでは「動きを減らす」も検証する。画像は `ui-tests/artifacts/` に出力する。
 
+## 日本バージョン
+
+`node server/server.js` を起動し、`node ui-tests/japan.js` を実行する。タイトルの「日本」で切り替わること（図鑑が「妖怪」になる）、日本の城（仮の絵）、自分の忍者は見えて相手の忍者は盤面に出ないことを確かめる。
+
 ## スマホの代わりの確認（オフライン・長押し拡大）
 
 `node server/server.js` を起動し、`node ui-tests/device.js` を実行する。

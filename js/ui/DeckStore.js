@@ -1,6 +1,8 @@
 // 複数のデッキを端末に保存する。旧版の1枠は最初の枠に引き継ぐ。
-const KEY = 'cf-mydecks-v2';
-const LEGACY_KEY = 'cf-mydeck-v1';
+import { EDITION } from './edition.js';
+// マイデッキは版ごとに分ける（日本と西洋のカードは混ぜない）
+const KEY = EDITION === 'western' ? 'cf-mydecks-v2' : `cf-mydecks-${EDITION}-v1`;
+const LEGACY_KEY = EDITION === 'western' ? 'cf-mydeck-v1' : null;
 export const DECK_SLOTS = 4;
 let memory;
 

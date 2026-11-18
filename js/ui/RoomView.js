@@ -192,7 +192,10 @@ export class RoomView {
     const settings = this.node('section', null, 'room-settings'); box.append(settings);
     settings.append(this.node('h2', '対戦ルール'));
     if (!host) settings.append(this.node('p', 'ルールとCPUは部屋主が選びます。自分の城・デッキは変更できます。', 'room-note'));
-    for (const [key,label,list] of [['winCondition','勝ち方','winConditions'],['deckMode','山札','deckModes'],['teams','チームの分け方','teamModes']]) {
+    // 版（西洋・日本）。部屋の全員が同じ版で遊ぶ（変えると、ちがう版の人の画面は読み直される）
+    const rules = [['winCondition','勝ち方','winConditions'],['deckMode','山札','deckModes'],['teams','チームの分け方','teamModes']];
+    if ((choices.editions ?? []).length > 1) rules.unshift(['edition','国（版）','editions']);
+    for (const [key,label,list] of rules) {
       this.select(settings, label, choices[list], room.settings[key], host, v => this.act('setRules', [{[key]:v}]), `rule:${key}`);
     }
     if (host) {

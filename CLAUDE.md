@@ -117,6 +117,7 @@ js/
     ChatView.js    … チャットとスタンプ（💬ボタン・吹き出し）
     DeckEditor.js・DeckStore.js … デッキ編成の画面と、マイデッキの保存（この端末の localStorage）
     CardZoom.js    … デッキ編成・図鑑でカードを長押しすると拡大（傾き・偏光）
+    edition.js     … 版（西洋・日本）の切り替え・和風の言葉・日本の仮の絵の割り当て
     stories.js     … 図鑑で読むカードのストーリー（画面だけで使う文。カードを増やしたら1つ足す。ui-tests/stories.js が確かめる）
     art.js・config.js … 画像の割り当てと、UIの数値（CPUの強さの割り当ても）
     precache.js    … オフライン用の一覧（自動生成。node js/ui/build-precache.js）
@@ -1190,7 +1191,16 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 - **オンライン**：`server/server.js` の `loadData()` が `data/japan/` も読み、`editions.japan` に入れる。部屋の `setRules` に `edition`（`"western"` / `"japan"`。部屋主だけ）。変えると、席のデッキは新しい版の見本に戻る（マイデッキは外れる）。`room` の `settings.edition`・`choices.editions`
 - **シミュレーション**：`node tests/sim/run.js --set japan`・`node tests/sim/costdecks.js --set japan`（`tests/helpers.js` の `loadJson(name, set)`）
 - 確かめたこと：`tests/japan.test.js`（読める・西洋版と混ざっていない・合成の行き先・妖怪の駒・デッキ）、`tests/lobby.test.js`（部屋で版を選ぶ）。`node tests/sim/run.js --games 300 --set japan`：全組み合わせが決着。smart 同士は平均24.7手番（西洋版27.7。忍者が止められないぶん少し短い）・p1 勝率53%。smart vs random 89%。`costdecks.js --set japan --games 250`：バランス対籠城49%・突撃対バランス53%・突撃対籠城50%。**試合が短い件（review-queue）は日本版にも当てはまる**
-- 画面（UI担当）：タイトルでの切り替え、和風の言葉（魔法→妖術・魔物→妖怪など）、日本の城・妖怪・カードの絵（はじめは仮の絵）。画面のPRで入れる
+- **画面**（`js/ui/edition.js`）
+  - タイトルの「西洋／日本」で選ぶ。この端末に覚え（`localStorage` の `cf-edition`）、ページを読み直して切り替える（カード・絵・言葉がまるごと変わるため）。URL の `?edition=japan` でも選べる。`<html data-edition>` に版が入る
+  - データ：日本バージョンは `cards.json`・`monsters.json`・`castles.json`・`decks.json` を `data/japan/` から読む（`dataPath()`）
+  - 言葉：画面の文は西洋版の言葉で書いてあるので、表示するときに言いかえる（魔法→妖術・魔物→妖怪・魔法使い→呪術師・精霊→式神・歩兵→足軽 など。`startWordSkin()` が画面の文字を見張って直す。チャット・人の名前は変えない）
+  - 絵（仮）：日本のカード・妖怪は、同じ役割の西洋の絵を使う（`JAPAN_ART_ALIAS`・`YOKAI_ART_ALIAS`）。忍者と日本の城は、コードで描いた仮の絵（`art.js` の `svgNinja`・`svgJapaneseCastle`）。専用の絵ができたら `art.js` を差しかえる
+  - マイデッキは版ごとに別に保存する（`cf-mydecks-japan-v1`）
+  - 兵士の系統（図鑑・遊び方）：足軽・騎馬・弓・呪術師・忍者（`js/ui/config.js`）
+  - 忍者：自分の忍者は少し透けて青白く光る（相手から見えていない印）。ひとりで遊ぶ・同じ端末では、見ている人の陣地以外の `stealth` のイベントを飛ばし、交代したら相手の忍者を盤面から外す（`js/main.js`）
+  - オンライン：部屋を作った人の版で部屋が始まる。ちがう版の人が入ると、部屋の版を覚えて読み直す（同じタブなら元の部屋につなぎ直す）。部屋主は部屋の画面の「国（版）」でも変えられる
+  - 確かめたこと：`node ui-tests/japan.js`（切り替え・図鑑・日本の城・忍者が相手から見えない）。タイトルは7つの大きさでスクロールなしで収まる
 
 ## 全体の設計（STEP 2〜5 の見通し）
 

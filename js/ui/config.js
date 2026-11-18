@@ -1,8 +1,19 @@
 // 画面の演出・操作の調整値。数値はここにまとめる（ゲームのルールの数値は data/ にある）。
 // 時間はすべてミリ秒。speed を 2 にすると全部の演出が倍の長さになる。
 
+import { isJapan } from './edition.js';
+
+// 日本バージョンの兵士の系統（data/japan/cards.json の根っこのカード）
+const JAPAN_FAMILIES = [
+  {root:'ashigaru',name:'足軽',note:'進んで城を攻める。攻撃と打たれ強さの基準。'},
+  {root:'hayauma',name:'騎馬',note:'速く進んで城へ。打たれ弱いので出す道を選ぼう。'},
+  {root:'yumiAshigaru',name:'弓',note:'動かずに近い相手の兵士や妖怪を撃つ。射撃の反撃は受けない。'},
+  {root:'minaraiJujutsushi',name:'呪術師',note:'動かずに撃つ。兵士も妖怪もいなければ狙った城を撃つ。'},
+  {root:'shinobiMinarai',name:'忍者',note:'相手から見えず、敵の兵士をすり抜けて城へ。妖怪には止められる。打たれ弱い。'},
+];
+
 export const UI_CONFIG = {
-  soldierFamilies: [
+  soldierFamilies: isJapan ? JAPAN_FAMILIES : [
     {root:'infantry',name:'普通の兵士',note:'進んで城を攻める。攻撃と打たれ強さの基準。'},
     {root:'scout',name:'騎兵',note:'速く進んで城へ。打たれ弱いので出す道を選ぼう。'},
     {root:'apprenticeArcher',name:'弓兵',note:'動かずに近い相手の兵士や魔物を撃つ。射撃の反撃は受けない。'},

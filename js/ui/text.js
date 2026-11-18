@@ -116,7 +116,7 @@ export function cardShort(def) {
   if (!def) return [];
   if (def.kind === 'soldier') {
     // 弓兵・魔法使い（role）は動かないので、速さの代わりに射程を出す
-    const third = def.role && def.role !== 'melee' ? { icon: 'target', text: `射${def.range}` } : { icon: 'boot', text: def.speed };
+    const third = ['archer', 'mage'].includes(def.role) ? { icon: 'target', text: `射${def.range}` } : { icon: 'boot', text: def.speed };
     return [{ icon: 'sword', text: def.attack }, { icon: 'heart', text: def.hp }, third];
   }
   if (def.kind === 'weapon') {

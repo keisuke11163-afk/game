@@ -35,6 +35,7 @@ import { checkCostDeck } from './game/Setup.js';
 import { STRATEGIES } from './game/strategies.js';
 import { checkSync } from './ui/syncCheck.js';
 import { UI_CONFIG } from './ui/config.js';
+import { EDITION, EDITIONS, isJapan, dataPath, saveEdition, startWordSkin } from './ui/edition.js';
 import { sound } from './ui/Sound.js';
 import { castleArt, unitArt, imageArt, icon, colorOf, preloadAssets, isAssetReady } from './ui/art.js';
 import { playerName, setPlayerNames, reasonText, soldierInfo, monsterInfo, GAME_OVER_TEXT, GAME_OVER_TEXT_LOST } from './ui/text.js';
@@ -190,10 +191,13 @@ function hideLoading() {
 }
 
 async function boot() {
+  document.documentElement.dataset.edition = EDITION;
+  startWordSkin(document.body);
   try {
     [cards, rules, monsters, upgrades, rarities, castles, decks, weather, stamps] = await Promise.all([
-      loadJson('data/cards.json'), loadJson('data/rules.json'),
-      loadOptionalJson('data/monsters.json'), loadOptionalJson('data/upgrades.json'), loadOptionalJson('data/rarities.json'), loadOptionalJson('data/castles.json'), loadOptionalJson('data/decks.json'), loadOptionalJson('data/weather.json'), loadOptionalJson('data/stamps.json'),
+      // 日本バージョンは、カード・妖怪・城・デッキを data/japan/ から読む（edition.js）
+      loadJson(dataPath('cards.json')), loadJson(dataPath('rules.json')),
+      loadOptionalJson(dataPath('monsters.json')), loadOptionalJson(dataPath('upgrades.json')), loadOptionalJson(dataPath('rarities.json')), loadOptionalJson(dataPath('castles.json')), loadOptionalJson(dataPath('decks.json')), loadOptionalJson(dataPath('weather.json')), loadOptionalJson(dataPath('stamps.json')),
     ]);
   } catch (err) {
     console.error(err);
@@ -359,10 +363,45 @@ async function setupOffline() {
 
 // ---------- タイトル・メニュー ----------
 
+/** タイトルの「西洋／日本」の切り替え。選んだ版を覚えて、ページを読み直す（カード・絵・言葉がまるごと変わるため） */
+function setupEditionSwitch() {
+  const box = document.createElement('div');
+  box.id = 'edition-switch';
+  box.className = 'edition-switch';
+  box.setAttribute('role', 'group');
+  box.setAttribute('aria-label', '遊ぶ国（版）');
+  box.dataset.noWa = '';
+  for (const ed of Object.values(EDITIONS)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'edition-option';
+    b.dataset.edition = ed.id;
+    b.setAttribute('aria-pressed', String(ed.id === EDITION));
+    b.innerHTML = `<strong></strong><small></small>`;
+    b.querySelector('strong').textContent = ed.id === 'japan' ? '日本' : '西洋';
+    b.querySelector('small').textContent = ed.note;
+    b.addEventListener('click', () => {
+      if (ed.id === EDITION) return;
+      sound.play('tap');
+      saveEdition(ed.id);
+      // URL の ?edition= を外して読み直す（覚えた版で始まる）
+      const url = new URL(location.href);
+      url.searchParams.delete('edition');
+      location.replace(url.href);
+    });
+    box.append(b);
+  }
+  $('title-main').prepend(box);
+}
+
 function setupTitle(deckOptions) {
-  document.querySelector('#title .title-pic').innerHTML =
-    `<div class="title-castle left">${imageArt('ui/title-castle-blue.png', '', 'art castle-art')}</div><div class="title-unit left">${imageArt('ui/title-knight-blue.png', '', 'art unit-art')}</div>` +
-    `<div class="title-unit right">${imageArt('ui/title-infantry-orange.png', '', 'art unit-art')}</div><div class="title-castle right">${imageArt('ui/title-castle-orange.png', '', 'art castle-art')}</div>`;
+  document.querySelector('#title .title-pic').innerHTML = isJapan
+    // 日本バージョン：日本の城と、忍者・足軽（仮の絵）
+    ? `<div class="title-castle left">${castleArt('blue')}</div><div class="title-unit left">${unitArt('shinobiMinarai', 'blue')}</div>` +
+      `<div class="title-unit right">${unitArt('ashigaru', 'orange')}</div><div class="title-castle right">${castleArt('orange')}</div>`
+    : `<div class="title-castle left">${imageArt('ui/title-castle-blue.png', '', 'art castle-art')}</div><div class="title-unit left">${imageArt('ui/title-knight-blue.png', '', 'art unit-art')}</div>` +
+      `<div class="title-unit right">${imageArt('ui/title-infantry-orange.png', '', 'art unit-art')}</div><div class="title-castle right">${imageArt('ui/title-castle-orange.png', '', 'art castle-art')}</div>`;
+  setupEditionSwitch();
   localSetup = new LocalSetup({castles,decks,rules,...deckOptions,onStart:(level,options)=>startLocal(undefined,level,options)});
   let modeOpener;
   const openLocalOptions = (mode, opener) => {
@@ -664,7 +703,7 @@ async function startLocal(seedOverride, cpuLevel = null, options = null) {
   tutorial.close();
   if (cpu && (replayTutorial || tutorial.pending())) {
     const hand = game.getState(cpu.humanId).players[cpu.humanId].hand;
-    game.debugSetHand(cpu.humanId, ['infantry', ...hand.slice(1).map(c => c.type)]);
+    game.debugSetHand(cpu.humanId, [UI_CONFIG.soldierFamilies[0].root, ...hand.slice(1).map(c => c.type)]);
     tutorial.start(cpu.humanId);
     replayTutorial = false;
   }
@@ -912,9 +951,29 @@ function leaveOnline() {
   setTitleWaiting(false);
 }
 
+/** 版をそろえた部屋（部屋を作った人が、自分の版を1回だけ部屋に伝える） */
+const editionSentRooms = new Set();
+
 function onRoom(r) {
   room = r;
   if (r.you) { viewerId = r.you; session.playerId = r.you; saveOnlineSession(session); }
+  // 部屋の版（西洋・日本）と、この画面の版をそろえる
+  const roomEdition = r.settings?.edition ?? 'western';
+  if ((r.choices?.editions ?? []).length > 1 && roomEdition !== EDITION) {
+    const humans = r.players.filter((p) => !p.cpu).length;
+    if (r.you === r.hostId && !r.started && humans === 1 && !editionSentRooms.has(r.roomId)) {
+      // 部屋を作った人：自分の版を部屋に伝える
+      editionSentRooms.add(r.roomId);
+      void session.act('setRules', [{ edition: EDITION }]);
+    } else {
+      // 部屋の版で遊ぶ：版を覚えて読み直す（同じタブなら、元の部屋につなぎ直す）
+      editionSentRooms.add(r.roomId);
+      saveEdition(roomEdition);
+      toast(`この部屋は「${EDITIONS[roomEdition]?.name ?? roomEdition}」で遊びます。切り替えます…`, 'info');
+      setTimeout(() => location.reload(), 600);
+      return;
+    }
+  }
   setPlayerNames(Object.fromEntries(r.players.map((p) => [p.playerId, p.name])));
   if (!r.started) {
     gen++; anim.skip(); queue = []; batches = []; model = null;
@@ -1120,11 +1179,22 @@ function setBusy(value) {
   }
 }
 
+/** 見ている人の陣地（チーム戦なら城の持ち主） */
+function viewerSide() {
+  return model?.players?.[viewerId]?.castleOwner ?? viewerId;
+}
+
+/** 忍者（見えない兵士）のイベントは、見ている人の陣地のものだけ見せる（オンラインはサーバーが隠す。同じ決まり） */
+function hiddenFromViewer(ev) {
+  return ev.payload?.stealth !== undefined && ev.payload.stealth !== viewerSide();
+}
+
 async function drainEvents() {
   const g = gen;
   setBusy(true);
   while (queue.length && g === gen) {
     const ev = queue.shift();
+    if (hiddenFromViewer(ev)) continue;
     try {
       if (ev.type === 'turnStarted' && usesHandover() && ev.payload.playerId !== viewerId) {
         await anim.play(ev, queue, model, { viewerId, lookupCard });
@@ -1569,6 +1639,19 @@ function handover(playerId, turn) {
         .filter((ev) => ev.type === 'cardDrawn' && ev.payload.playerId === viewerId)
         .flatMap((ev) => ev.payload.cardIds));
       model.hand = st.players[viewerId].hand.filter((c) => !willDraw.has(c.cardId));
+      // 見る人が替わったら、ほかの陣地の忍者（見えない兵士）を盤面から外し、
+      // 見る人の陣地の忍者（前の人には見えていなかった）を、見る人の状態から戻す
+      for (const [id, p] of Object.entries(model.players ?? {})) {
+        const side = p.castleOwner ?? id;
+        const isNinja = (s) => cards[s.type]?.role === 'ninja';
+        if (side !== viewerSide()) {
+          p.soldiers = (p.soldiers ?? []).filter((s) => !isNinja(s));
+        } else {
+          const shown = new Set((p.soldiers ?? []).map((s) => s.soldierId));
+          const back = (st.players[id]?.soldiers ?? []).filter((s) => isNinja(s) && !shown.has(s.soldierId));
+          p.soldiers = [...(p.soldiers ?? []), ...back.map((s) => structuredClone(s))];
+        }
+      }
       if (model.deckMode !== 'shared') {
         // 1人1つの山札：見る人が替わると、山札・捨て札の数はその人のものになる。
         // このあと流れる「引く」演出で減らす前の数（＝引き終わりの数＋これから引く枚数）から始める

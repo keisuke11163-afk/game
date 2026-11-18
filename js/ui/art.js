@@ -3,6 +3,8 @@
 // - どの種類にどの絵を使うかは、ここで決める（data/ には画像の情報を入れない）
 // - カード・魔物を増やしたら、CARD_ART / MONSTER_ART に同じキーで足す。なければ仮の絵（名前の1文字目）になる
 
+import { isJapan, JAPAN_ART_ALIAS, YOKAI_ART_ALIAS, NINJA_TYPES } from './edition.js';
+
 const INK = '#4a2e1a';
 const SKIN = '#ffe2c4';
 const STEEL = '#cfd8e0';
@@ -467,7 +469,51 @@ function beastArt(beast, name, cls) {
     .replace('<span class="asset-wait">…</span>', `<span class="asset-fallback">${fallback}</span>`);
 }
 
+// ---------- 日本バージョン（仮の絵） ----------
+/** 日本のカード・妖怪は、専用の絵ができるまで、同じ役割の西洋の絵を使う（edition.js の対応表） */
+const artType = (type) => (typeof type === 'string' && type.startsWith('beast_') && YOKAI_ART_ALIAS[type.slice(6)] ? `beast_${YOKAI_ART_ALIAS[type.slice(6)]}` : JAPAN_ART_ALIAS[type] ?? type);
+
+/** 忍者（仮の絵）：黒装束に、プレイヤーの色の鉢巻き。位が上がるほど巻物・刀が増える */
+function svgNinja(type, color = 'blue', bg = false) {
+  const c = PLAYER_COLORS[color] ?? PLAYER_COLORS.blue;
+  const rank = ['shinobiMinarai', 'genin', 'chunin', 'jonin', 'toryo'].indexOf(type);
+  const cloth = '#2f3446';
+  const back = bg ? `<rect width="100" height="100" fill="#3a4258"/><circle cx="74" cy="22" r="14" fill="#f3e6b0" opacity=".9"/>` : '';
+  const sword = rank >= 1 ? `<path d="M64 30 L84 8" stroke="#cfd8e0" stroke-width="5" stroke-linecap="round"/><path d="M64 30 L84 8" ${S} stroke-width="1.5" fill="none"/><path d="M60 34 l8 -8" ${S} stroke-width="5"/>` : '';
+  const scroll = rank >= 3 ? `<rect x="22" y="70" width="16" height="9" rx="4" fill="#f2deb0" ${S} stroke-width="2.5"/>` : '';
+  const star = rank >= 2 ? `<path d="M80 70 l4 -9 l4 9 l-9 -5 h10 Z" fill="#cfd8e0" ${S} stroke-width="2"/>` : '';
+  const crown = rank >= 4 ? `<path d="M38 18 l6 8 l6 -10 l6 10 l6 -8 v10 h-24 Z" fill="#f2c94c" ${S} stroke-width="2.5"/>` : '';
+  return svg('0 0 100 100', back +
+    `<ellipse cx="50" cy="94" rx="24" ry="5" fill="#000" opacity=".18"/>` + sword +
+    `<path d="M30 92 q2 -26 20 -28 q18 2 20 28 Z" fill="${cloth}" ${S} stroke-width="3.5"/>` +
+    `<circle cx="50" cy="44" r="24" fill="${cloth}" ${S} stroke-width="3.5"/>` +
+    `<rect x="31" y="38" width="38" height="13" rx="6" fill="${SKIN}" ${S} stroke-width="2.5"/>` +
+    `<ellipse cx="42" cy="44.5" rx="2.6" ry="3.4" fill="${INK}"/><ellipse cx="58" cy="44.5" rx="2.6" ry="3.4" fill="${INK}"/>` +
+    `<path d="M27 32 q23 -8 46 0 v6 q-23 -7 -46 0 Z" fill="${c.main}" ${S} stroke-width="2.5"/><path d="M73 33 q10 2 14 -6 M73 36 q8 6 15 2" fill="none" stroke="${c.main}" stroke-width="4" stroke-linecap="round"/>` +
+    scroll + star + crown, bg ? 'card-art-svg' : 'unit-art', bg ? 'xMidYMid slice' : 'xMidYMid meet');
+}
+
+/** 日本の城（仮の絵）：石垣の上に白い壁と、三重の瓦屋根。屋根の上に金の鯱。旗はプレイヤーの色 */
+function svgJapaneseCastle(color) {
+  const c = PLAYER_COLORS[color] ?? PLAYER_COLORS.blue;
+  const roof = (cx, y, half, h) => `<path d="M${cx - half - 8} ${y + h} Q${cx - half} ${y + h - 4} ${cx - half + 6} ${y} H${cx + half - 6} Q${cx + half} ${y + h - 4} ${cx + half + 8} ${y + h} Z" fill="#4b5563" ${S} stroke-width="3.5"/>`;
+  const wall = (cx, y, half, h) => `<rect x="${cx - half}" y="${y}" width="${half * 2}" height="${h}" fill="#fbf7ee" ${S} stroke-width="3"/>` +
+    `<rect x="${cx - 6}" y="${y + 4}" width="12" height="${h - 8}" fill="#6b4a2e" ${S} stroke-width="2"/>`;
+  return svg('0 0 200 150',
+    `<ellipse cx="100" cy="143" rx="88" ry="7" fill="#000" opacity=".16"/>` +
+    `<path d="M28 142 L44 104 H156 L172 142 Z" fill="#b9ad97" ${S} stroke-width="4"/>` +
+    `<path d="M40 128 H160 M48 116 H152" stroke="#8f8370" stroke-width="2.5"/>` +
+    wall(100, 82, 46, 22) + roof(100, 72, 50, 12) +
+    wall(100, 56, 34, 18) + roof(100, 46, 38, 12) +
+    wall(100, 32, 22, 16) + roof(100, 20, 26, 12) +
+    `<path d="M82 20 q-6 -10 2 -14 q4 4 0 8 Z M118 20 q6 -10 -2 -14 q-4 4 0 8 Z" fill="#f2c94c" ${S} stroke-width="2.5"/>` +
+    `<g class="castle-flag"><path d="M160 104 V70" ${S} stroke-width="3.5"/><path d="M161 71 h14 v24 h-14 Z" fill="${c.main}" ${S} stroke-width="3"/></g>`,
+    'castle-art');
+}
+
 export function cardArt(type, color = 'blue', name = '') {
+  if (isJapan && NINJA_TYPES.has(type)) return svgNinja(type, color, true);
+  if (isJapan) type = artType(type);
   if (beastOf(type)) return beastArt(beastOf(type), name, 'card-art-svg');
   if (NEW_SOLDIER_TYPES.has(type)) return generatedSoldierPng(`cards/card-${kebab(type)}.png`, 'art card-art-svg', name);
   const fallback = svgCardArt(type, color, name);
@@ -479,6 +525,8 @@ export function cardArt(type, color = 'blue', name = '') {
   return CARD_TYPES.has(type) ? imageArt(`cards/card-${kebab(type)}.png`, fallback, 'art card-art-svg') : fallback;
 }
 export function unitArt(type, color, name = '') {
+  if (isJapan && NINJA_TYPES.has(type)) return svgNinja(type, color, false);
+  if (isJapan) type = artType(type);
   if (beastOf(type)) return beastArt(beastOf(type), name, 'unit-art');
   if (NEW_SOLDIER_TYPES.has(type)) return generatedSoldierPng(`units/${kebab(type)}-${color === 'orange' ? 'orange' : 'blue'}.png`, 'art unit-art', name);
   const fallback = svgUnitArt(type, color, name);
@@ -486,12 +534,15 @@ export function unitArt(type, color, name = '') {
     ? imageArt(`units/${kebab(type)}-${color === 'orange' ? 'orange' : 'blue'}.png`, fallback, 'art unit-art') : fallback;
 }
 export function monsterArt(type, name = '') {
+  if (isJapan) type = YOKAI_ART_ALIAS[type] ?? type;
   const fallback = svgMonsterArt(type, name);
   return ['slime','goblin','dragon','bat','skeleton','golem','demon','ghost','treant','mimic','vampire','demonKing'].includes(type)
     ? imageArt(`units/monster-${kebab(type)}.png`, fallback, 'art monster-art') : fallback;
 }
 export function castleArt(color, damage = 0, kind = 'standard') {
   const team = color === 'orange' ? 'orange' : 'blue';
+  // 日本の城（仮の絵）。壊れ具合は、親の data-damage に合わせて CSS がひび・煙を出す
+  if (isJapan) return svgJapaneseCastle(team).replace('<svg ', `<svg data-damage-stage="${Math.max(0, Math.min(3, damage))}" `);
   if (damage >= 4) return imageArt(`castles/castle-${team}-ruined.png`, '', 'art castle-art');
   const stage = Math.max(0, Math.min(3, damage));
   const prefix = ['fortress','tower','barracks'].includes(kind) ? kind : 'castle';

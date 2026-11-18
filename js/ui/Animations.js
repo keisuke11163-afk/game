@@ -709,7 +709,7 @@ export class Animations {
     if (wild) glow.style.borderRadius = '50%';
     this.animate(glow, [{ transform: 'scale(.2)', opacity: 0 }, { transform: 'scale(.6)', opacity: .9, offset: .45 }, { transform: `scale(${1.6 + rank * .35})`, opacity: 0 }], { duration: total, fill: 'forwards' }).then(() => glow.remove());
     for (const side of [0, 1]) {
-      const inputType = wild && side === 0 ? 'adapt' : from;
+      const inputType = wild && side === 0 ? (Object.keys(this.cards).find((t) => this.cards[t].effect === 'wild') ?? 'adapt') : from;
       const el = this.effectCard(inputType, this.cards[inputType]?.name); stage.append(el);
       this.animate(el, [
         { transform: `translate(${side ? 150 : -150}px, 20px) rotate(${side ? 20 : -20}deg) scale(.9)`, opacity: 0 },
@@ -997,7 +997,7 @@ export class Animations {
       if (rank >= 2) this.sparks(to, { count: 3 + rank * 3, color: shine, spread: 70 + rank * 16, size: 7 });
     });
     // 防御の帯はカードが消えてから見せる。ほかの効果は従来どおり重ねてテンポを保つ。
-    if (type === 'reflect' || type === 'decoy') await cardAnimation;
+    if (['reflectSpell', 'nullifySoldier'].includes(this.cards[type]?.effect)) await cardAnimation;
     else await this.delay(dur * 0.7);
   }
 
