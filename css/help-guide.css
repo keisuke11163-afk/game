@@ -17,3 +17,8 @@
 .guide-filters label:last-child {grid-column:1/-1;}
 .guide-card-detail {min-width:0;}.guide-card-detail>div {min-width:0;overflow-wrap:anywhere;}
 @media(max-height:500px){.help-box {width:min(100%,520px);}.help-flow {font-size:11px;}}
+
+/* 図鑑のカードの物語：羊皮紙の上に、少し古い本のような書体で */
+#app .guide-story { margin: 10px 0 4px; padding: 8px 12px 10px; border: 1px solid #d8c39a; border-left: 4px solid #b98a45; border-radius: 8px; background: #fffaf0; color: #5a4325; }
+#app .guide-story > summary { cursor: pointer; font-family: var(--head); font-size: 13px; letter-spacing: .06em; color: #8a5a24; min-height: 32px; display: flex; align-items: center; }
+#app .guide-story > p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.85; font-style: normal; text-wrap: pretty; }

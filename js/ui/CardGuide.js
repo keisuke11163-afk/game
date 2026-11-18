@@ -4,6 +4,9 @@ import { mountMiniCard } from './cardView.js';
 import { KIND_LABEL, cardDescription, cardShort, elementName } from './text.js';
 import { currentRates, fusionPaths } from './CardInfo.js';
 import { rewardOdds } from '../game/Setup.js';
+import { CARD_STORIES } from './stories.js';
+import { JAPAN_CARD_STORIES } from './stories-japan.js';
+import { isJapan } from './edition.js';
 
 const node = (tag, cls, text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -165,6 +168,13 @@ export class CardGuide {
       ?? (this.rules.maxMp > 0 && ['damageEnemyCastle','damageEnemySoldiers','poisonEnemySoldiers','poisonEnemy','freezeEnemySoldiers','summonSpirit'].includes(def.effect) ? def.mpCost ?? rarity?.mpCost ?? 0 : 0);
     info.append(node('p', 'guide-mp', `MPコスト：${cost}。${def.effect === 'gainMp' ? `MPを${def.amount}回復。上限${this.rules.maxMp}、超過分は失われます。` : 'MPは自然回復しません。'} `));
     this.content.append(hero, node('p', 'guide-effect', cardDescription(def, this.rules, { monsters: Boolean(this.monsters), debug: this.debug })));
+    const story = (isJapan ? JAPAN_CARD_STORIES : CARD_STORIES)[type];
+    if (story) {
+      // カードの物語（読み物）。効果の説明のすぐ下に、開いた状態で出す。たためる
+      const box = node('details', 'guide-story'); box.open = true;
+      box.append(node('summary', '', 'ストーリー'), node('p', '', story));
+      this.content.append(box);
+    }
     if(def.kind==='soldier')this.content.append(node('p','guide-movement',def.range?`射程${def.range}マス。出した次の自分の番から撃ち、${def.stay}回で帰還。撃てない・凍結の番も回数が減る。向かってくる兵士とは通常の戦いになる。`:`速さ${def.speed}マス。出した番は動かず、次の自分の番から進軍。城に届くと攻撃力×${this.rules.soldierCastleDamageMultiplier??1}のダメージ。`));
     if (def.monster) {
       this.content.append(node('p', 'progress-note', 'とどめを刺すと手札に入ります。使ったり捨てたりすると、使い切り置き場へ移ります。'));
