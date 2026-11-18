@@ -1,0 +1,56 @@
+name: Audit and repair game image transparency
+
+on:
+  push:
+    branches:
+      - fix/alpha-assets-audit-20261119
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  alpha-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out review branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/alpha-assets-audit-20261119
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install image processing dependencies
+        run: python -m pip install "numpy>=1.26,<3" "Pillow>=10,<13" "opencv-python-headless>=4.9,<5"
+
+      - name: Clean the six transparent rarity-frame illustration windows
+        run: python tools/repair_card_windows.py
+
+      - name: Conservative alpha audit and repair
+        run: python tools/repair_alpha.py --apply --report reports/asset-alpha-audit.json
+
+      - name: Report changed artwork and upload audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: transparency-audit
+          path: |
+            reports/asset-alpha-audit.json
+            reports/card-window-cleanup.json
+          if-no-files-found: error
+
+      - name: Commit safe PNG repairs only to review branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/cards assets/units assets/ui assets/fx reports/asset-alpha-audit.json reports/card-window-cleanup.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Repair high-confidence PNG alpha issues and publish audit"
+            git push origin HEAD:fix/alpha-assets-audit-20261119
+          else
+            echo "No safe automatic PNG repairs were found."
+          fi
