@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { PollChannels } from './poll.js';
 import { Lobby } from './rooms.js';
 import { Game } from '../js/game/Game.js';
 import { Db } from './accounts/db.js';
@@ -95,7 +96,7 @@ function sendJson(res, status, body) {
  * @param {() => () => number} [o.makeRng] 試合ごとの乱数を作る関数（テストでシードを固定するため）
  * @param {number} [o.cpuDelayMs] CPU が1手ごとに待つ時間（ミリ秒。0 ならすぐ動く。テスト用）
  */
-export function createGameServer({ data = loadData(), makeRng = () => Math.random, cpuDelayMs = 700, accounts = null, logger = null, maintenance = null } = {}) {
+export function createGameServer({ data = loadData(), makeRng = () => Math.random, cpuDelayMs = 700, accounts = null, logger = null, maintenance = null, pollOptions = {} } = {}) {
   const env = accounts?.env ?? process.env;
   const log = logger ?? new Logger({ level: env.CF_LOG_LEVEL ?? 'info', out: env.CF_LOG === 'off' || (!accounts && !maintenance) ? () => {} : undefined });
   const metrics = new Metrics();
@@ -115,6 +116,10 @@ export function createGameServer({ data = loadData(), makeRng = () => Math.rando
   const maint = account ? startMaintenance({ db: account.accounts.db, accounts: account.accounts, missions: account.missions, log, env, ...maintenance }) : null
   const sweeper = setInterval(() => lobby.sweep(30 * 60 * 1000), 60 * 1000);
   sweeper.unref();
+  // SSE が届かない中継（Cloudflare のクイックトンネルなど）のための受け取り口
+  const polls = new PollChannels(pollOptions);
+  const pollSweeper = setInterval(() => polls.sweep(), 10 * 1000);
+  pollSweeper.unref();
 
   const server = createServer(async (req, res) => {
     // どの要求も、URL の問い合わせ部分（token など）・ヘッダー・本文を残さずに、数と時間だけ記録する
@@ -206,13 +211,24 @@ export function createGameServer({ data = loadData(), makeRng = () => Math.rando
       });
       return undefined;
     }
+    if (req.method === 'GET' && url.pathname === '/api/poll') {
+      const token = url.searchParams.get('token');
+      const found = lobby.findSeat(token);
+      if (!found) { polls.drop(token); return sendJson(res, 403, { ok: false, reason: '部屋に入っていません（合言葉から入り直してください）' }); }
+      const ctrl = new AbortController();
+      req.on('close', () => ctrl.abort());
+      const out = await polls.poll(token, (push) => found.room.connect(found.seat, push), url.searchParams.get('after'), { signal: ctrl.signal });
+      if (res.destroyed) return undefined;
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ ok: true, reset: out.reset, messages: out.messages }));
+    }
     if (req.method === 'GET') return serveStatic(url.pathname, res);
     return sendJson(res, 404, { ok: false, reason: 'ありません' });
   }
   server.lobby = lobby;
   server.account = account;
   server.metrics = metrics; server.log = log;
-  server.on('close', () => { clearInterval(sweeper); maint?.stop(); if (account) { account.close(); account.accounts.db.close(); } });
+  server.on('close', () => { clearInterval(sweeper); clearInterval(pollSweeper); polls.close(); maint?.stop(); if (account) { account.close(); account.accounts.db.close(); } });
   return server;
 }
 

@@ -5,6 +5,7 @@ import { connect } from 'node:net';
 import { createGameServer, loadData } from '../server/server.js';
 import { filterEventFor } from '../js/game/visibility.js';
 import { seededRng } from './helpers.js';
+import { PollChannels } from '../server/poll.js';
 
 /** SSE を読むクライアント。届いたメッセージを messages にためる */
 async function openStream(base, token) {
@@ -336,4 +337,69 @@ test('SSE：中継（nginx・Cloudflare など）が溜め込まない送り方�
   } finally {
     server.close();
   }
+});
+
+test('ロングポーリング（SSE が届かない中継のため）：部屋の知らせが届き、待ち・接続中・部屋がないときを正しく扱う', async () => {
+  let seed = 3;
+  const server = createGameServer({ data: loadData(), makeRng: () => seededRng(seed++), cpuDelayMs: 0, pollOptions: { waitMs: 300, idleMs: 200 } });
+  await new Promise((r) => server.listen(0, r));
+  const base = `http://localhost:${server.address().port}`;
+  const poll = (token, after = 0) => fetch(`${base}/api/poll?token=${token}&after=${after}`).then(async (r) => ({ status: r.status, cache: r.headers.get('cache-control'), json: await r.json() }));
+  try {
+    const a = await post(base, '/api/join', { passphrase: 'poll-room', name: 'A' });
+    const first = await poll(a.token);
+    assert.equal(first.status, 200);
+    assert.equal(first.cache, 'no-store');
+    assert.equal(first.json.reset, true); // 最初は作り直し扱い
+    const room1 = first.json.messages.map((m) => m.msg).filter((m) => m.type === 'room').at(-1);
+    assert.equal(room1.players.length, 1);
+    assert.equal(room1.players[0].connected, true); // 取りに来ているあいだは「接続中」
+    let after = first.json.messages.at(-1).seq;
+    // 何もなければ、waitMs だけ待って空で返す
+    const t0 = Date.now();
+    const empty = await poll(a.token, after);
+    assert.deepEqual(empty.json.messages, []);
+    assert.ok(Date.now() - t0 >= 250);
+    // 待っているあいだに B が入ると、すぐ届く
+    const waiting = poll(a.token, after);
+    await new Promise((r) => setTimeout(r, 50));
+    const b = await post(base, '/api/join', { passphrase: 'poll-room', name: 'B' });
+    const got = await waiting;
+    assert.equal(got.json.reset, false);
+    const room2 = got.json.messages.map((m) => m.msg).filter((m) => m.type === 'room').at(-1);
+    assert.deepEqual(room2.players.map((p) => p.name), ['A', 'B']);
+    after = got.json.messages.at(-1).seq;
+    // 試合を始めると、イベントと状態が届く
+    assert.equal((await post(base, '/api/action', { token: a.token, method: 'start', args: [] })).ok, true);
+    const started = await poll(a.token, after);
+    const types = started.json.messages.map((m) => m.msg.type);
+    assert.ok(types.includes('event') && types.includes('state'));
+    assert.ok(started.json.messages.every((m) => m.seq > after)); // 受け取り済みのものは来ない
+    // 知らない token は 403
+    assert.equal((await poll('nope')).status, 403);
+    assert.ok(b.token);
+  } finally {
+    server.close();
+  }
+});
+
+test('ロングポーリングの受け取り口：取りに来なくなったら切る・ためすぎたら作り直す', async () => {
+  let t = 0;
+  const polls = new PollChannels({ waitMs: 10, idleMs: 1000, maxQueue: 3, now: () => t });
+  let connected = 0;
+  const connect = (push) => { connected += 1; push({ type: 'room' }); return () => { connected -= 1; }; };
+  const r1 = await polls.poll('tok', connect, 0);
+  assert.equal(r1.reset, true);
+  assert.equal(connected, 1);
+  t = 500; polls.sweep();
+  assert.equal(connected, 1); // まだ取りに来ている
+  t = 2000; polls.sweep();
+  assert.equal(connected, 0); // 取りに来なくなったので切った
+  const r2 = await polls.poll('tok', connect, 99);
+  assert.equal(r2.reset, true); // 作り直した：番号は1から
+  assert.deepEqual(r2.messages.map((m) => m.seq), [1]);
+  for (let i = 0; i < 4; i++) polls.push('tok', { type: 'event' }); // ためすぎ
+  assert.equal(connected, 0);
+  assert.equal(polls.channels.size, 0);
+  polls.close();
 });
