@@ -112,6 +112,9 @@ let cardZoom = null; // カードの拡大表示（CardZoom）。ホームのデ
 let deckEditor = null; // デッキ編成の画面（コスト制の見本のデッキがあるときだけ）
 let chat = null;     // チャットとスタンプ（ChatView）
 let weather = null;  // data/weather.json（読めなければ null：天候なし）
+let elements = null; // data/elements.json（読めなければ null：組み込みの相性表を使う）
+let reactions = null; // data/reactions.json（読めなければ null：属性の反応なし）
+let factions = null; // data/factions.json（読めなければ null：陣営の一覧なし。カードの faction は形だけ確かめる）
 let stages = null;  // data/stages.json（読めなければ null：ステージなし）
 let progressPanel;
 let cardGuide;
@@ -208,9 +211,9 @@ function hideLoading() {
 
 async function boot() {
   try {
-    [cards, rules, monsters, upgrades, rarities, castles, decks, weather, stamps, stages] = await Promise.all([
+    [cards, rules, monsters, upgrades, rarities, castles, decks, weather, stamps, stages, elements, reactions, factions] = await Promise.all([
       loadJson('data/cards.json'), loadJson('data/rules.json'),
-      loadOptionalJson('data/monsters.json'), loadOptionalJson('data/upgrades.json'), loadOptionalJson('data/rarities.json'), loadOptionalJson('data/castles.json'), loadOptionalJson('data/decks.json'), loadOptionalJson('data/weather.json'), loadOptionalJson('data/stamps.json'), loadOptionalJson('data/stages.json'),
+      loadOptionalJson('data/monsters.json'), loadOptionalJson('data/upgrades.json'), loadOptionalJson('data/rarities.json'), loadOptionalJson('data/castles.json'), loadOptionalJson('data/decks.json'), loadOptionalJson('data/weather.json'), loadOptionalJson('data/stamps.json'), loadOptionalJson('data/stages.json'), loadOptionalJson('data/elements.json'), loadOptionalJson('data/reactions.json'), loadOptionalJson('data/factions.json'),
     ]);
   } catch (err) {
     console.error(err);
@@ -755,6 +758,9 @@ async function startLocal(seedOverride, cpuLevel = null, options = null) {
     if (monsters) opts.monsters = structuredClone(monsters);
     if (upgrades) opts.upgrades = structuredClone(upgrades);
     if (weather) opts.weather = structuredClone(weather);
+    if (elements) opts.elements = structuredClone(elements);
+    if (reactions) opts.reactions = structuredClone(reactions);
+    if (factions) opts.factions = structuredClone(factions);
     // ステージ：詳細設定で選んだもの（選ばなければ毎試合ランダム）
     if (stages) {
       opts.stages = structuredClone(stages);

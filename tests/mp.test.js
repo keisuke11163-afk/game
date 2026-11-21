@@ -150,7 +150,7 @@ test('排出率の恒久強化：買うほど、引くときに高レアが出�
 
 test('データ：初期コインは0、歩兵の速さ2・騎兵の速さ3、武器は重ねられる', () => {
   assert.equal(loadJson('rules.json').initialCoins, 0);
-  assert.equal(loadJson('rules.json').maxMp, 20);
+  assert.equal(loadJson('rules.json').maxMp, 30);
   const c = loadJson('cards.json');
   assert.equal(c.infantry.speed, 2);
   assert.equal(c.cavalry.speed, 3);

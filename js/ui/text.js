@@ -2,6 +2,7 @@ import { RARITY_NAMES } from './rarity.js';
 // 画面に出す文章。カード名と数値は cards.json / rules.json / monsters.json / upgrades.json から入れる。
 
 import { ELEMENT_LOOK, STATUS_ICON, ICON } from './look.js';
+import { DEFAULT_ELEMENTS, elementsBeatenBy } from '../game/Elements.js';
 
 // オンライン対戦では、部屋に入るときに入れた名前を出す（同じ端末のときは空）
 let customNames = {};
@@ -39,9 +40,6 @@ export function slotNote(def) {
 export function elementName(element) {
   return ELEMENT_LOOK[element]?.name ?? '';
 }
-
-/** その属性が強い相手の属性（水は火に強い、火は風に強い、風は土に強い、土は水に強い） */
-const ELEMENT_BEATS = { water: 'fire', fire: 'wind', wind: 'earth', earth: 'water' };
 
 // 効果（cards.json の effect）ごとの説明文の型
 const missingDescriptions = new Set();
@@ -96,11 +94,11 @@ export function cardDescription(def, rules, opts = {}) {
       : `HP${def.hp}・攻撃${def.attack}・1ターンに${def.speed}マス進む`;
   } else if (def.kind === 'weapon') {
     const el = def.element ? elementName(def.element) : '';
-    const weak = def.element ? elementName(ELEMENT_BEATS[def.element]) : '';
+    const weak = def.element ? elementsBeatenBy(def.element).map(elementName).join('・') : '';
     text = `自分の兵士に持たせる：攻撃+${def.attackBonus}`;
     if (el) {
       text += `・${el}属性`;
-      text += rules?.elementBonus ? `（${weak}の相手に+${rules.elementBonus}）` : `（${weak}に強い）`;
+      text += weak ? `（${weak}に強い。攻撃×${DEFAULT_ELEMENTS.multipliers.advantage}）` : '';
     }
   } else {
     const make = EFFECT_TEXT[def.effect];

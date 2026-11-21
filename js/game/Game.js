@@ -20,13 +20,16 @@
 
 import { Card, ELEMENTS, LANE_SCOPE_EFFECTS, MP_EFFECTS, BASIC_DICE } from './Card.js';
 import { Monster, validateUpgrades } from './Monster.js';
-import { Pile, checkCostDeck, DECK_COST_DEFAULTS, chainOrder, validateCastles, validateDecks, validateRarities, sampleDeckTypes, sampleType, sampleTypeOfRarity, nextRarityWithCards, dropRates, rewardOdds } from './Setup.js';
+import { validateFactions, factionPool } from './Factions.js';
+import { Pile, checkCostDeck, DECK_COST_DEFAULTS, chainOrder, validateCastles, validateDecks, validateRarities, sampleDeckTypes, sampleType, sampleTypeOfRarity, nextRarityWithCards, dropRates, rewardOdds, isDrawable } from './Setup.js';
 import { Soldier } from './Soldier.js';
 import { Player } from './Player.js';
 import { Road } from './Road.js';
 import { Castle } from './Castle.js';
 import { validateWeather } from './Weather.js';
 import { validateStages, pickStage } from './Stage.js';
+import { DEFAULT_ELEMENTS, validateElements, elementMultiplier, applyElementMultiplier } from './Elements.js';
+import { validateReactions, buildReactionIndex, findReaction, applyReactionMultiplier } from './Reactions.js';
 
 /** 2人のときのプレイヤーID（人数は rules.playerCount。3人以上は p3〜p8 が続く） */
 export const PLAYER_IDS = ['p1', 'p2'];
@@ -88,11 +91,10 @@ export const EVENT_TYPES = [
   'weatherChanged',
   'weatherLightning',
   'attackMissed',
+  'attachmentChanged',
+  'reactionTriggered',
   'gameOver',
 ];
-
-/** 属性の強い・弱い：キーの属性は、値の属性に強い（水は火に強い、火は風に強い、風は土に強い、土は水に強い） */
-export const ELEMENT_BEATS = { water: 'fire', fire: 'wind', wind: 'earth', earth: 'water' };
 
 /** rules.json に必要な項目と、許される最小値 */
 const RULE_KEYS = {
@@ -107,7 +109,7 @@ const RULE_KEYS = {
 
 /** rules.json の省略できる項目と、省略したときの値 */
 const OPTIONAL_RULES = {
-  elementBonus: 0, // 属性が強いときに増えるダメージ
+  elementBonus: 0, // （使わなくなった）属性の相性は data/elements.json の倍率で決まる
   monsterFirstRound: 3, // 魔物が出はじめる周回
   monsterCooldownRounds: 0, // 魔物を倒した道に、次の魔物が出ない周回の数
   maxRounds: 0, // 周回の上限（0 なら上限なし）
@@ -166,6 +168,10 @@ const OPTIONAL_RULES = {
   mulligan: false,
   // 背水の陣：城HPが上限 × overdriveHpRatio（四捨五入）以下になると、その城の兵士全員の攻撃 +overdriveAttack（0 なら使わない）
   overdriveAttack: 0,
+  // 属性の反応（reactions.json を渡したとき）：付着が残るターン数（持ち主のターンの終わりに1減る）と、
+  // 1人が自分のターンに起こせる反応の回数（0 なら反応も付着もなし）
+  attachTurns: 2,
+  reactionsPerTurn: 1,
 };
 /** 文字列で選ぶ項目と、選べる値（最初の値が省略したときの値） */
 const CHOICE_RULES = {
@@ -210,7 +216,7 @@ const isCoinCard = (def) => def.effect === 'gainCoins' || (def.effect === 'dice'
 const CASTLE_HP_EVENTS = new Set(['castleDamaged', 'castleHealed', 'monsterAttackedCastle']);
 const STEALTH_EVENTS = new Set([
   'soldierDeployed', 'soldierMoved', 'soldierDamaged', 'soldierDestroyed', 'statusApplied', 'statusCleared',
-  'weaponEquipped', 'shieldAdded', 'soldierBuffed', 'monsterClashed',
+  'weaponEquipped', 'shieldAdded', 'soldierBuffed', 'monsterClashed', 'attachmentChanged', 'reactionTriggered',
 ]);
 export class Game {
   /**
@@ -224,10 +230,13 @@ export class Game {
    * @param {object} [options.decks] data/decks.json の中身（deckMode "own" のときに使う）
    * @param {{castles?: string[], decks?: string[]}} [options.setup] 席ごとの城の種類・デッキ
    */
-  constructor({ cards, rules, rng = Math.random, monsters = null, upgrades = null, castles = null, decks = null, rarities = null, weather = null, stages = null, setup: setupArg = {} } = {}) {
+  constructor({ cards, rules, rng = Math.random, monsters = null, upgrades = null, castles = null, decks = null, rarities = null, weather = null, stages = null, elements = null, reactions = null, factions = null, races = null, setup: setupArg = {} } = {}) {
     const setup = setupArg ?? {};
     if (rarities !== null) validateRarities(rarities);
-    Card.validateDefinitions(cards, rarities);
+    if (elements !== null) validateElements(elements);
+    if (reactions !== null) validateReactions(reactions, elements ?? DEFAULT_ELEMENTS);
+    if (factions !== null) validateFactions(factions);
+    Card.validateDefinitions(cards, rarities, { factions, races });
     Game.validateRules(rules);
     if (typeof rng !== 'function') throw new Error('rng は 0以上1未満の数を返す関数にしてください');
     if (monsters !== null) {
@@ -240,7 +249,11 @@ export class Game {
     if (castles !== null) validateCastles(castles);
     if (decks !== null) validateDecks(decks, cards);
 
+    this.elementTable = elements ?? DEFAULT_ELEMENTS;
     this.cardDefs = cards;
+    /** 属性の反応（reactions.json。渡さなければ null＝反応も付着もない） */
+    this.reactionDefs = reactions;
+    this.reactionIndex = reactions ? buildReactionIndex(reactions) : null;
     this.rarityDefs = rarities;
     this.monsterDefs = monsters;
     this.weatherDefs = weather;
@@ -262,6 +275,26 @@ export class Game {
     this.castleDefs = castles;
     this.deckDefs = decks;
     this.rng = rng;
+    // 四大陣営（PR-A）：setup.faction で陣営を選ぶと、山札・ドローの引き当て・入手券・排出率の表示が
+    // 「その陣営のカード＋全陣営共通」の候補だけになる（Factions.js の isLegalForFaction）。省略すると今までどおり全カード
+    this.factionDefs = factions;
+    /** 選んだ陣営のID（陣営モードでなければ null） */
+    this.faction = null;
+    /** @type {Set<string>|null} 陣営モードの候補（カード種類）。陣営モードでなければ null */
+    this.factionPoolTypes = null;
+    if (setup.faction !== undefined && setup.faction !== null) {
+      if (!factions) throw new Error('setup.faction を使うときは factions（data/factions.json）を渡してください');
+      if (typeof setup.faction !== 'string' || !Object.hasOwn(factions, setup.faction)) {
+        throw new Error(`setup.faction は ${Object.keys(factions).join(' / ')} のどれかにしてください`);
+      }
+      // 今は全員が同じ陣営の共有山札だけ（異陣営戦は別のモードで作る予定）
+      if (this.rules.deckMode !== 'shared') throw new Error('陣営モードは共有山札（deckMode "shared"）だけです');
+      this.faction = setup.faction;
+      this.factionPoolTypes = factionPool(cards, setup.faction);
+      if (this.factionPoolTypes.size === 0) throw new Error(`陣営「${factions[setup.faction].name}」のカードがありません`);
+    }
+    /** 反応を使うか（reactions を渡し、reactionsPerTurn が1以上） */
+    this.reactionsOn = Boolean(reactions) && this.rules.reactionsPerTurn > 0;
 
     this.nextCardNumber = 1;
     this.nextSoldierNumber = 1;
@@ -484,7 +517,7 @@ export class Game {
 
   static validateRules(rules) {
     if (!rules || typeof rules !== 'object') throw new Error('rules.json の中身を渡してください');
-    for (const key of ['elementBonus', 'monsterFirstRound', 'monsterCooldownRounds', 'maxRounds', 'drawUntilHand', 'initialCoins', 'coinPerTurn', 'monsterAttackGrowth', 'initialMp', 'maxMp', 'monsterEvolveEvery', 'nightFirstRound', 'nightBeastAttack', 'nightStealthAttack', 'nightMonsterAttack', 'secondPlayerHandBonus', 'secondPlayerArmor', 'overdriveAttack']) {
+    for (const key of ['elementBonus', 'monsterFirstRound', 'monsterCooldownRounds', 'maxRounds', 'drawUntilHand', 'initialCoins', 'coinPerTurn', 'monsterAttackGrowth', 'initialMp', 'maxMp', 'monsterEvolveEvery', 'nightFirstRound', 'nightBeastAttack', 'nightStealthAttack', 'nightMonsterAttack', 'secondPlayerHandBonus', 'secondPlayerArmor', 'overdriveAttack', 'reactionsPerTurn']) {
       const v = rules[key];
       if (v !== undefined && (!Number.isInteger(v) || v < 0)) {
         throw new Error(`rules.json の ${key} は 0 以上の整数にしてください（書かなければ ${OPTIONAL_RULES[key]}）`);
@@ -504,6 +537,7 @@ export class Game {
       throw new Error('rules.json の seatCastleBonus は、人数ぶん以上の0以上の整数の配列にしてください');
     }
     if (rules.nightRounds !== undefined && (!Number.isInteger(rules.nightRounds) || rules.nightRounds < 1)) throw new Error('rules.json の nightRounds は 1 以上の整数にしてください');
+    if (rules.attachTurns !== undefined && (!Number.isInteger(rules.attachTurns) || rules.attachTurns < 1)) throw new Error('rules.json の attachTurns は 1 以上の整数にしてください（書かなければ 2）');
     for (const key of ['monsterLateBias', 'monsterEvolveMultiplier']) {
       const v = rules[key];
       if (v !== undefined && (typeof v !== 'number' || !(v >= 0))) throw new Error(`rules.json の ${key} は 0 以上の数にしてください（書かなければ ${OPTIONAL_RULES[key]}）`);
@@ -612,12 +646,25 @@ export class Game {
    * 渡さないときは、count 枚ずつ。
    */
   buildDeckTypes() {
-    if (this.rarityDefs) return sampleDeckTypes(this.cardDefs, this.rarityDefs, this.rules.deckSize, this.rng);
+    // 共有山札は全員で1組なので、陣営モードでも全員が同じ候補（いちばん前の席の人の候補を使う）
+    const pool = this.poolOf(this.playerOrder[0]);
+    if (this.rarityDefs) return sampleDeckTypes(this.cardDefs, this.rarityDefs, this.rules.deckSize, this.rng, pool);
     const types = [];
     for (const [type, def] of Object.entries(this.cardDefs)) {
+      if (pool && !pool.has(type)) continue;
+      if (!isDrawable(def, Boolean(pool))) continue; // 効果がまだないカード・陣営モード専用のカード（今はどれも count 0）
       for (let i = 0; i < def.count; i++) types.push(type);
     }
     return types;
+  }
+
+  /**
+   * その人がカードを引き当てるときの候補（カード種類の Set）。陣営モードでなければ null（＝全カード）。
+   * 今は全員が同じ陣営なので playerId は使わないが、異陣営戦（1人1つの陣営。PR-E）に広げられるよう、プレイヤーごとに聞く形にしてある
+   */
+  // eslint-disable-next-line no-unused-vars
+  poolOf(playerId) {
+    return this.factionPoolTypes;
   }
 
   /** Fisher-Yates シャッフル（rng を使うので、rng を固定すれば順番も固定できる） */
@@ -636,7 +683,7 @@ export class Game {
     for (let i = 0; i < count; i++) {
       // 運命の祈り：山札からではなく、排出率を上げて引き当てる
       if (player.luck && this.rarityDefs) {
-        const type = sampleType(this.cardDefs, this.rarityDefs, this.rng, { from: player.luck.from, multiplier: player.luck.boost });
+        const type = sampleType(this.cardDefs, this.rarityDefs, this.rng, { from: player.luck.from, multiplier: player.luck.boost }, this.poolOf(player.id));
         const lucky = this.createCard(type);
         player.hand.push(lucky);
         cardIds.push(lucky.cardId);
@@ -645,7 +692,7 @@ export class Game {
       }
       // 排出率の恒久強化：chance の確率で、山札からではなく、排出率を上げて引き当てる（山札は減らない）
       if (player.permLuck && this.rarityDefs && this.rng() < player.permLuck.chance) {
-        const type = sampleType(this.cardDefs, this.rarityDefs, this.rng, { from: player.permLuck.from, multiplier: player.permLuck.boost });
+        const type = sampleType(this.cardDefs, this.rarityDefs, this.rng, { from: player.permLuck.from, multiplier: player.permLuck.boost }, this.poolOf(player.id));
         const lucky = this.createCard(type);
         player.hand.push(lucky);
         cardIds.push(lucky.cardId);
@@ -859,6 +906,7 @@ export class Game {
     player.playedThisTurn = false;
     player.soldiersPlayedThisTurn = 0;
     player.coinCardsPlayedThisTurn = 0;
+    player.reactionsThisTurn = 0;
     const playedLastTurn = player.cardsPlayedThisTurn;
     player.cardsPlayedThisTurn = 0;
     this.emit('turnStarted', { playerId, turn: this.turn });
@@ -965,6 +1013,32 @@ export class Game {
         if (soldier.burn.turns <= 0) {
           soldier.burn = null;
           this.emit('statusCleared', { playerId: player.id, soldierId: soldier.soldierId, status: 'burn' });
+        }
+      }
+      // 継続ダメージ（感電・砂嵐の反応。盾は効かない。回数が来たら治る）
+      if (soldier.dot) {
+        const { amount } = soldier.dot;
+        soldier.takeDamage(amount, { ignoreShield: true });
+        this.emit('soldierDamaged', {
+          playerId: player.id, soldierId: soldier.soldierId, amount, hp: soldier.hp, cause: 'dot', blocked: 0,
+        });
+        soldier.dot.turns -= 1;
+        if (soldier.isDead) {
+          this.removeSoldier(player, soldier, 'killed');
+          continue;
+        }
+        if (soldier.dot.turns <= 0) {
+          soldier.dot = null;
+          this.emit('statusCleared', { playerId: player.id, soldierId: soldier.soldierId, status: 'dot' });
+        }
+      }
+      // 鈍足（泥・吹雪の反応）：この進軍は速さが下がる。進軍のたびに1減る
+      soldier.slowNow = soldier.slow > 0 ? soldier.slowAmount : 0;
+      if (soldier.slow > 0) {
+        soldier.slow -= 1;
+        if (soldier.slow === 0) {
+          soldier.slowAmount = 0;
+          this.emit('statusCleared', { playerId: player.id, soldierId: soldier.soldierId, status: 'slow' });
         }
       }
       // 凍結：この進軍は休む
@@ -1117,16 +1191,161 @@ export class Game {
     return this.checkGameOver();
   }
 
-  /** 兵士にダメージ（盾が先に受ける）。soldierDamaged を出し、HPが0なら消す。消えたら true */
-  damageSoldier(owner, soldier, amount, cause) {
+  /**
+   * 兵士にダメージ（盾が先に受ける）。soldierDamaged を出し、HPが0なら消す。消えたら true。
+   * hit（{ attackerId, element }）を渡すと、属性つきの攻撃として付着・反応を調べる（属性の反応）
+   */
+  damageSoldier(owner, soldier, amount, cause, hit = null) {
+    let after = null;
+    if (hit) ({ amount, after } = this.prepareHit(hit.attackerId, owner, soldier, amount, hit.element));
     amount = this.reduceDamage(owner, amount);
     const blocked = soldier.takeDamage(amount);
     this.emit('soldierDamaged', {
       playerId: owner.id, soldierId: soldier.soldierId, amount, hp: soldier.hp, cause, blocked,
     });
-    if (!soldier.isDead) return false;
-    this.removeSoldier(owner, soldier, 'killed');
-    return true;
+    const dead = soldier.isDead;
+    if (dead) this.removeSoldier(owner, soldier, 'killed');
+    after?.();
+    return dead;
+  }
+
+  // ================= 属性の反応 =================
+  // 属性つきの攻撃（兵士の戦い・射撃、element のある魔法）が兵士に当たると、標的にその属性が付着する（attachTurns）。
+  // 付着しているところへ別の属性で当てると、reactions.json に組があれば反応が起きる（攻撃した人の自分のターンに reactionsPerTurn 回まで）。
+  // 凍結中は氷、やけど中は火が付着しているものとして照合する（付着 attachment があればそちらが先）。
+
+  /** 照合に使う付着 { element, implicit, from }。implicit は、凍結・やけどから見た付着なら "frozen" / "burn" */
+  attachmentOf(soldier) {
+    if (soldier.attachment) return { element: soldier.attachment.element, implicit: null, from: soldier.attachment.from ?? null };
+    if (soldier.frozen > 0) return { element: 'ice', implicit: 'frozen', from: null };
+    if (soldier.burn) return { element: 'fire', implicit: 'burn', from: null };
+    return null;
+  }
+
+  /** 付着を変える（element が null なら消す）。attachmentChanged を出す */
+  setAttachment(owner, soldier, element, cause, from = null) {
+    if (element === null && !soldier.attachment) return;
+    soldier.attachment = element === null ? null : { element, turns: this.rules.attachTurns, from };
+    this.emit('attachmentChanged', {
+      playerId: owner.id, soldierId: soldier.soldierId, element, turns: element === null ? 0 : this.rules.attachTurns, cause,
+    });
+  }
+
+  /**
+   * 属性つきの攻撃が兵士 target に当たる直前（外れていないとき）に呼ぶ。
+   * 反応が起きるなら reactionTriggered を出し、倍率を掛けたダメージを返す（土の精霊などで軽くする前）。
+   * after() は、ダメージ（soldierDamaged・消えたなら soldierDestroyed）のあとに呼ぶ：付着の変化と特殊効果
+   * @returns {{amount: number, after: (() => void)|null}}
+   */
+  prepareHit(attackerId, owner, target, amount, element) {
+    if (!this.reactionsOn || !element || amount <= 0) return { amount, after: null };
+    const attacker = this.players[attackerId];
+    const att = this.attachmentOf(target);
+    const canReact = attacker && attackerId === this.currentPlayer && attacker.reactionsThisTurn < this.rules.reactionsPerTurn;
+    const id = att && canReact ? findReaction(this.reactionDefs, this.reactionIndex, att.element, element, this.rng) : null;
+    if (!id) {
+      return { amount, after: () => { if (owner.soldiers.includes(target)) this.setAttachment(owner, target, element, 'hit'); } };
+    }
+    const def = this.reactionDefs.reactions[id];
+    attacker.reactionsThisTurn += 1;
+    const multiplier = def.multiplier ?? null;
+    const boosted = applyReactionMultiplier(amount, multiplier);
+    this.emit('reactionTriggered', {
+      attackerId, playerId: owner.id, soldierId: target.soldierId, reaction: id, name: def.name,
+      attached: att.element, element, multiplier,
+      ...(att.from ? { chain: att.from } : {}),
+      ...(att.element === 'chaos' || element === 'chaos' ? { chaos: true } : {}),
+    });
+    return { amount: boosted, after: () => this.afterReaction(owner, target, def, id, att, boosted) };
+  }
+
+  /** 反応のあと：使った付着を変える（凍結・やけどから見た付着なら、その状態を治す）→ 特殊効果 */
+  afterReaction(owner, target, def, id, att, damage) {
+    const alive = owner.soldiers.includes(target);
+    if (alive) {
+      if (att.implicit === 'frozen') {
+        target.frozen = 0;
+        this.emit('statusCleared', { playerId: owner.id, soldierId: target.soldierId, status: 'frozen' });
+      } else if (att.implicit === 'burn') {
+        target.burn = null;
+        this.emit('statusCleared', { playerId: owner.id, soldierId: target.soldierId, status: 'burn' });
+      }
+      const next = def.attachment ?? null;
+      if (next !== null || target.attachment) this.setAttachment(owner, target, next, 'reaction', next === null ? null : id);
+    }
+    const side = this.side(owner.id);
+    const road = this.findRoad(target.roadId);
+    // 範囲：同じ道の上の、標的と同じ陣地の兵士（忍者を除く）。adjacent は前後1マス（同じマスも）
+    const around = (scope) => {
+      if (scope === 'target' || !road) return [];
+      const list = [];
+      for (const pid of this.alivePlayerIds().filter((x) => this.side(x) === side)) {
+        for (const x of this.players[pid].visibleSoldiers) {
+          if (x === target || x.roadId !== target.roadId) continue;
+          if (scope === 'adjacent' && Math.abs(x.position - target.position) > 1) continue;
+          list.push({ owner: this.players[pid], soldier: x });
+        }
+      }
+      return list;
+    };
+    for (const ef of def.effects ?? []) {
+      if (ef.kind === 'splash') {
+        const amount = Math.max(1, Math.ceil(damage * ef.ratio));
+        for (const n of around(ef.scope)) if (n.owner.soldiers.includes(n.soldier)) this.damageSoldier(n.owner, n.soldier, amount, 'reaction');
+        continue;
+      }
+      const scope = ef.scope ?? 'target';
+      const hits = [...(alive ? [{ owner, soldier: target }] : []), ...around(scope)];
+      for (const h of hits) if (h.owner.soldiers.includes(h.soldier)) this.applyReactionStatus(h.owner, h.soldier, ef);
+    }
+  }
+
+  /** 反応の状態をつける（重ねがけは、量・回数を大きい方にそろえる）。statusApplied を出す */
+  applyReactionStatus(owner, soldier, ef) {
+    const base = { playerId: owner.id, soldierId: soldier.soldierId };
+    switch (ef.kind) {
+      case 'status':
+        if (ef.status === 'frozen') {
+          soldier.frozen = Math.max(ef.turns, soldier.frozen);
+          this.emit('statusApplied', { ...base, status: 'frozen', turns: soldier.frozen });
+        } else {
+          this.setBurn(owner, soldier, ef.amount, ef.turns);
+        }
+        break;
+      case 'dot':
+        soldier.dot = { amount: Math.max(ef.amount, soldier.dot?.amount ?? 0), turns: Math.max(ef.turns, soldier.dot?.turns ?? 0) };
+        this.emit('statusApplied', { ...base, status: 'dot', turns: soldier.dot.turns, amount: soldier.dot.amount });
+        break;
+      case 'slow':
+        soldier.slow = Math.max(ef.turns, soldier.slow);
+        soldier.slowAmount = Math.max(ef.amount, soldier.slowAmount);
+        this.emit('statusApplied', { ...base, status: 'slow', turns: soldier.slow, amount: soldier.slowAmount });
+        break;
+      case 'blind':
+        soldier.blind = { chance: Math.max(ef.chance, soldier.blind?.chance ?? 0), turns: Math.max(ef.turns, soldier.blind?.turns ?? 0) };
+        this.emit('statusApplied', { ...base, status: 'blind', turns: soldier.blind.turns, chance: soldier.blind.chance });
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** 持ち主のターンの終わり：付着と命中低下の残りが1減り、0で消える */
+  tickReactionStatuses(player) {
+    if (!this.reactionsOn) return;
+    for (const soldier of [...player.soldiers]) {
+      if (soldier.blind) {
+        soldier.blind.turns -= 1;
+        if (soldier.blind.turns <= 0) {
+          soldier.blind = null;
+          this.emit('statusCleared', { playerId: player.id, soldierId: soldier.soldierId, status: 'blind' });
+        }
+      }
+      if (soldier.attachment) {
+        soldier.attachment.turns -= 1;
+        if (soldier.attachment.turns <= 0) this.setAttachment(player, soldier, null, 'expired');
+      }
+    }
   }
 
   removeSoldier(owner, soldier, reason) {
@@ -1202,17 +1421,17 @@ export class Game {
     let over = false;
     if (foes.length > 0) {
       const { owner, soldier: victim } = foes[0];
-      const miss = this.rollMiss();
+      const miss = this.rollMiss(soldier);
       const amount = miss ? 0 : this.fightDamage(soldier, victim);
       this.emit('soldierShot', { ...shot, target: { kind: 'soldier', playerId: owner.id, soldierId: victim.soldierId }, amount });
       if (miss) this.emitMiss(player.id, 'shot', { soldierId: soldier.soldierId });
-      else this.damageSoldier(owner, victim, amount, 'shot');
+      else this.damageSoldier(owner, victim, amount, 'shot', { attackerId: player.id, element: soldier.element });
     } else {
       const road = this.findRoad(soldier.roadId);
       const monster = this.monsters.find((m) =>
         inRange(m.roadId === PLAZA ? m.square : m.roadId === soldier.roadId ? road.toPosition(this.side(player.id), m.square) : null));
       if (monster) {
-        const miss = this.rollMiss();
+        const miss = this.rollMiss(soldier);
         const amount = miss ? 0 : this.fightDamage(soldier, monster);
         this.emit('soldierShot', { ...shot, target: { kind: 'monster', monsterId: monster.monsterId }, amount });
         if (miss) {
@@ -1223,7 +1442,7 @@ export class Game {
         }
       } else if (soldier.role === 'mage') {
         const enemy = this.players[soldier.targetId];
-        const miss = this.rollMiss();
+        const miss = this.rollMiss(soldier);
         // 城を撃つときも、天候の属性ボーナスは効く（兵士・魔物を撃つときと同じ）
         const amount = this.stageBoost(soldier, this.attackOf(soldier) + this.weatherElementBonus(soldier.element));
         this.emit('soldierShot', { ...shot, target: { kind: 'castle', playerId: enemy.id }, amount: miss ? 0 : amount });
@@ -1579,6 +1798,7 @@ export class Game {
     let rewardRarity = baseRarity;
     let lucky = false;
     if (baseRarity && this.rarityDefs && this.rules.rewardLuckyChance > 0) {
+      // 魔物のごほうびは、陣営モードでも候補で絞らない（仕様 5.1-4 の「魔物報酬は例外」。旧カード・ほかの陣営のカードも出うる）
       const next = nextRarityWithCards(this.cardDefs, this.rarityDefs, baseRarity);
       if (next && this.rng() < this.rules.rewardLuckyChance) {
         rewardRarity = next;
@@ -1596,7 +1816,7 @@ export class Game {
     if (reward) this.changeCoins(this.players[playerId], reward, 'reward');
     // ごほうびのカード：そのレアリティのカードが1枚、手札に入る（カードがなければ何も起きない）
     if (rewardRarity) {
-      const type = sampleTypeOfRarity(this.cardDefs, rewardRarity, this.rng);
+      const type = sampleTypeOfRarity(this.cardDefs, rewardRarity, this.rng); // 陣営モードでも絞らない（上の「例外」）
       if (type) {
         const card = this.createCard(type);
         this.players[playerId].hand.push(card);
@@ -1648,7 +1868,7 @@ export class Game {
       roadId: road.roadId,
       square: road.toSquare(this.side(player.id), soldier.position),
     });
-    const missM = this.rollMiss();
+    const missM = this.rollMiss(soldier);
     const missS = this.rollMiss();
     if (missM) this.emitMiss(player.id, 'fight', { soldierId: soldier.soldierId });
     // 魔物の攻撃が外れたとき：外した側は魔物なので playerId は null
@@ -1692,7 +1912,8 @@ export class Game {
     if (def.effect === 'drawCards' && pile.deck.length + pile.discard.length === 0) return fail('山札も捨て札もありません');
     if (def.effect === 'gainCard') {
       if (!this.rarityDefs) return fail('レアリティを使っていないので買えません');
-      if (!Object.values(this.cardDefs).some((d) => d.rarity === def.rarity && (d.weight ?? 1) > 0)) return fail('その強化はありません');
+      const pool = this.poolOf(player.id); // 陣営モードなら、その陣営の候補の中にそのレアリティがあるか
+      if (!Object.entries(this.cardDefs).some(([t, d]) => (!pool || pool.has(t)) && d.rarity === def.rarity && (d.weight ?? 1) > 0 && isDrawable(d, Boolean(pool)))) return fail('その強化はありません');
     }
     if (def.effect === 'permanentLuck') {
       if (!this.rarityDefs) return fail('レアリティを使っていないので買えません');
@@ -1738,7 +1959,7 @@ export class Game {
     } else if (def.effect === 'gainCard') {
       const cardIds = [];
       for (let i = 0; i < def.amount; i++) {
-        const card = this.createCard(sampleTypeOfRarity(this.cardDefs, def.rarity, this.rng));
+        const card = this.createCard(sampleTypeOfRarity(this.cardDefs, def.rarity, this.rng, this.poolOf(player.id)));
         player.hand.push(card);
         cardIds.push(card.cardId);
       }
@@ -1764,13 +1985,19 @@ export class Game {
    * 排出率の一覧（読むだけ。UI が「排出率を見る」画面に使う）
    * @returns {{rarities: object[], cards: object, monsters: object}|null} rarities を渡していなければ null
    */
-  getDropRates() {
+  getDropRates(viewerId = null) {
     if (!this.rarityDefs) return null;
-    const rates = dropRates(this.cardDefs, this.rarityDefs);
+    // 陣営モードなら、その陣営の候補の中での排出率（候補の外のカードは cards に入らない）
+    const pool = this.poolOf(viewerId);
+    const rates = dropRates(this.cardDefs, this.rarityDefs, null, pool);
     const rarities = Object.entries(this.rarityDefs).map(([id, r]) => ({ id, name: r.name, dropRate: r.dropRate }));
     const cards = {};
-    for (const [type, def] of Object.entries(this.cardDefs)) cards[type] = { name: def.name, rarity: def.rarity, rate: rates[type] };
+    for (const [type, def] of Object.entries(this.cardDefs)) {
+      if (pool && !pool.has(type)) continue;
+      cards[type] = { name: def.name, rarity: def.rarity, rate: rates[type] };
+    }
     const monsters = {};
+    // 魔物のごほうびは陣営で絞らない（defeatMonsterIfDead と同じ）
     for (const [type, def] of Object.entries(this.monsterDefs || {})) {
       if (def.rewardRarity) monsters[type] = { name: def.name, odds: rewardOdds(this.cardDefs, this.rarityDefs, def.rewardRarity, this.rules.rewardLuckyChance) };
     }
@@ -1793,6 +2020,10 @@ export class Game {
     // 適応は、どのカードとでも合成できる（相手のカードを2枚合成したのと同じ結果）
     const base = wildA ? b : a;
     if (!wildA && !wildB && a.type !== b.type) return fail('同じ種類のカードどうしでないと合成できません');
+    // 効果がまだないカード（implemented: false）は、合成の元にも、合成先にもしない
+    if (base.def.implemented === false || (base.def.fuseTo && this.cardDefs[base.def.fuseTo]?.implemented === false)) {
+      return fail('このカードの効果はまだありません');
+    }
     if (!base.def.fuseTo) {
       if (base.def.monster) return fail('魔物のカードは合成できません');
       // いちばん上のレアリティ（スペシャルを除く）だけ「これ以上」。ほかは合成しないカード（fuseTo: null・スペシャル）
@@ -1814,11 +2045,13 @@ export class Game {
     return ok();
   }
 
-  /** a が b に与えるダメージ（攻撃力 ＋ 属性が強ければ elementBonus） */
+  /**
+   * a が b に与えるダメージ。順番：基本の攻撃力 → ×属性倍率（切り上げ・最低1）→ ＋天候の属性ボーナス → ステージ倍率
+   */
   fightDamage(a, b) {
-    const strong = a.element && b.element && ELEMENT_BEATS[a.element] === b.element;
     const attack = a instanceof Soldier ? this.attackOf(a) : a.attack;
-    return this.stageBoost(a, attack + (strong ? this.rules.elementBonus : 0) + this.weatherElementBonus(a.element));
+    const scaled = applyElementMultiplier(attack, elementMultiplier(this.elementTable, a.element, b.element));
+    return this.stageBoost(a, scaled + this.weatherElementBonus(a.element));
   }
 
   /** 兵士の今の攻撃力（夜は、獣＝魔物の駒と、暗殺者・忍者が強くなる） */
@@ -1861,8 +2094,13 @@ export class Game {
   applyBurn(owner, soldier) {
     const burn = this.stageDef()?.burn;
     if (!burn || !owner.soldiers.includes(soldier)) return;
-    const turns = Math.max(burn.turns, soldier.burn?.turns ?? 0);
-    soldier.burn = { amount: Math.max(burn.amount, soldier.burn?.amount ?? 0), turns };
+    this.setBurn(owner, soldier, burn.amount, burn.turns);
+  }
+
+  /** やけど { amount, turns } をつける（量・残りの回数を大きい方にそろえる）。statusApplied を出す */
+  setBurn(owner, soldier, amount, turnsArg) {
+    const turns = Math.max(turnsArg, soldier.burn?.turns ?? 0);
+    soldier.burn = { amount: Math.max(amount, soldier.burn?.amount ?? 0), turns };
     this.emit('statusApplied', { playerId: owner.id, soldierId: soldier.soldierId, status: 'burn', turns, amount: soldier.burn.amount });
   }
 
@@ -1950,10 +2188,14 @@ export class Game {
     return element ? this.weatherDef()?.elementBonus?.[element] ?? 0 : 0;
   }
 
-  /** 霧のとき、攻撃が外れるか（霧でなければ乱数を使わない） */
-  rollMiss() {
+  /**
+   * 霧のとき、攻撃が外れるか（霧でなければ乱数を使わない）。
+   * soldier（攻撃する兵士）が命中低下（霧・砂嵐の反応）なら、その確率でも外れる（命中低下でなければ乱数を使わない）
+   */
+  rollMiss(soldier = null) {
     const chance = this.weatherDef()?.missChance ?? 0;
-    return chance > 0 && this.rng() < chance;
+    if (chance > 0 && this.rng() < chance) return true;
+    return Boolean(soldier?.blind) && this.rng() < soldier.blind.chance;
   }
 
   /** 外れたことを知らせる。kind は "fight" / "shot" / "spell" */
@@ -2045,13 +2287,16 @@ export class Game {
       square: road.toSquare(this.side(player.id), attacker.position), // 攻める側が止まったマス
     });
 
-    // 霧：攻撃が外れる（ダメージ0）
-    const missD = this.rollMiss();
-    const missA = this.rollMiss();
+    // 霧：攻撃が外れる（ダメージ0）。命中低下の兵士も外れることがある
+    const missD = this.rollMiss(attacker);
+    const missA = this.rollMiss(defender);
     if (missD) this.emitMiss(player.id, 'fight', { soldierId: attacker.soldierId });
     if (missA) this.emitMiss(enemy.id, 'fight', { soldierId: defender.soldierId });
-    const toDefender = missD ? 0 : this.reduceDamage(enemy, this.fightDamage(attacker, defender));
-    const toAttacker = missA ? 0 : this.reduceDamage(player, this.fightDamage(defender, attacker));
+    // 属性の反応：倍率は soldierDamaged の前に決まる（reactionTriggered が先）。付着・特殊効果は、消える兵士を消したあと
+    const hitD = missD ? null : this.prepareHit(player.id, enemy, defender, this.fightDamage(attacker, defender), attacker.element);
+    const hitA = missA ? null : this.prepareHit(enemy.id, player, attacker, this.fightDamage(defender, attacker), defender.element);
+    const toDefender = missD ? 0 : this.reduceDamage(enemy, hitD.amount);
+    const toAttacker = missA ? 0 : this.reduceDamage(player, hitA.amount);
     const blockedD = defender.takeDamage(toDefender);
     const blockedA = attacker.takeDamage(toAttacker);
     this.emit('soldierDamaged', {
@@ -2065,6 +2310,8 @@ export class Game {
     for (const [owner, s] of [[enemy, defender], [player, attacker]]) {
       if (s.isDead) this.removeSoldier(owner, s, 'killed');
     }
+    hitD?.after?.();
+    hitA?.after?.();
   }
 
   // ================= カードを出す =================
@@ -2299,6 +2546,8 @@ export class Game {
     }
     // 適応は合成専用。枠の決まりより先に答える（「もうメインを出しました」だと、次のターンなら出せるように読めてしまう）
     if (card.def.effect === 'wild') return fail('適応は合成に使うカードです（出せません）');
+    // 台帳だけあって効果がまだないカード（implemented: false）。ふつうは引き当てないので手札に来ないが、念のため
+    if (card.def.implemented === false) return fail('このカードの効果はまだありません');
     // 兵士は1ターン soldiersPerTurn 枚、メイン（攻撃の魔法）は1枚。付加（武器）・防御・回復や精霊などは何枚でも
     if (card.slot === 'soldier' && player.soldiersPlayedThisTurn >= this.rules.soldiersPerTurn) {
       return fail(`このターンに出せる兵士は${this.rules.soldiersPerTurn}枚までです`);
@@ -2462,11 +2711,16 @@ export class Game {
     this.requestDefense(
       { kind: 'soldiers', defenderId: side, attackerId: player.id, amount, soldierIds: [soldierId, ...near.map((n) => n.soldier.soldierId)] },
       () => {
-        if (owner.soldiers.includes(center)) this.damageSoldier(owner, center, amount, 'spell');
-        for (const n of near) if (n.owner.soldiers.includes(n.soldier)) this.damageSoldier(n.owner, n.soldier, half, 'spell');
+        if (owner.soldiers.includes(center)) this.damageSoldier(owner, center, amount, 'spell', this.spellHit(player, card));
+        for (const n of near) if (n.owner.soldiers.includes(n.soldier)) this.damageSoldier(n.owner, n.soldier, half, 'spell', this.spellHit(player, card));
       },
       () => this.checkGameOver(),
     );
+  }
+
+  /** 魔法が兵士に当たるときの属性（cards.json の element。なければ null＝付着も反応もしない） */
+  spellHit(player, card) {
+    return card.def.element ? { attackerId: player.id, element: card.def.element } : null;
   }
 
   castSpell(player, card, targetPlayer, roadId) {
@@ -2583,7 +2837,7 @@ export class Game {
         for (const id of this.alivePlayerIds()) {
           const owner = this.players[id];
           for (const soldier of [...owner.visibleSoldiers]) {
-            if (owner.soldiers.includes(soldier)) this.damageSoldier(owner, soldier, amount, 'spell');
+            if (owner.soldiers.includes(soldier)) this.damageSoldier(owner, soldier, amount, 'spell', this.spellHit(player, card));
           }
         }
         this.checkGameOver();
@@ -2602,7 +2856,7 @@ export class Game {
           this.requestDefense(
             { kind: 'soldiers', defenderId: enemy.id, attackerId: player.id, amount, soldierIds: hit.map((x) => x.soldierId) },
             () => {
-              for (const soldier of hit) if (enemy.soldiers.includes(soldier)) this.damageSoldier(enemy, soldier, amount, 'spell');
+              for (const soldier of hit) if (enemy.soldiers.includes(soldier)) this.damageSoldier(enemy, soldier, amount, 'spell', this.spellHit(player, card));
             },
             () => this.checkGameOver(),
           );
@@ -2689,7 +2943,7 @@ export class Game {
         }
         for (const id of this.alivePlayerIds().filter((id) => this.side(id) === enemy.id)) {
           const owner = this.players[id];
-          for (const soldier of [...owner.visibleSoldiers]) this.damageSoldier(owner, soldier, amount, 'spell');
+          for (const soldier of [...owner.visibleSoldiers]) if (owner.soldiers.includes(soldier)) this.damageSoldier(owner, soldier, amount, 'spell', this.spellHit(player, card));
         }
         this.damageCastle(enemy, amount, { kind: 'spell', type: card.type });
         this.checkGameOver();
@@ -2730,7 +2984,7 @@ export class Game {
           this.emit('castleCured', { playerId: player.id });
         }
         for (const foe of this.opponentsOf(player.id)) {
-          for (const soldier of [...foe.visibleSoldiers]) this.damageSoldier(foe, soldier, amount, 'spell');
+          for (const soldier of [...foe.visibleSoldiers]) if (foe.soldiers.includes(soldier)) this.damageSoldier(foe, soldier, amount, 'spell', this.spellHit(player, card));
         }
         break;
       }
@@ -2836,7 +3090,7 @@ export class Game {
           break;
         }
         for (const soldier of [...enemy.visibleSoldiers]) {
-          if (enemy.soldiers.includes(soldier)) this.damageSoldier(enemy, soldier, amount, 'spell');
+          if (enemy.soldiers.includes(soldier)) this.damageSoldier(enemy, soldier, amount, 'spell', this.spellHit(player, card));
         }
         this.requestDefense(
           { kind: 'castle', defenderId: enemy.id, attackerId: player.id, amount, from: 'spell', spellType: card.type },
@@ -2916,7 +3170,9 @@ export class Game {
   /** 兵士 soldier の今の速さ（風の精霊は、最低でも amount にする） */
   speedOf(player, soldier) {
     const sp = player.spirit;
-    return sp && sp.spirit === 'wind' ? Math.max(soldier.speed, sp.amount) : soldier.speed;
+    const speed = sp && sp.spirit === 'wind' ? Math.max(soldier.speed, sp.amount) : soldier.speed;
+    // 鈍足（泥・吹雪の反応）：この進軍は速さが下がる（最低1）
+    return soldier.slowNow > 0 ? Math.max(1, speed - soldier.slowNow) : speed;
   }
 
   /** 土の精霊：owner が受けるダメージを軽くする（0のダメージはそのまま。1より小さくはならない） */
@@ -3033,6 +3289,7 @@ export class Game {
     const def = card.def;
     const defender = this.players[pending.defenderId];
     if (def.kind !== 'defense') return { targets: [], reason: '防御カードだけ出せます' };
+    if (def.implemented === false) return { targets: [], reason: 'このカードの効果はまだありません' };
     if (pending.kind === 'castle') {
       if (def.effect === 'reflectSpell') {
         return pending.from === 'spell'
@@ -3159,6 +3416,7 @@ export class Game {
     player.soldiersPlayedThisTurn = 0;
     player.coinCardsPlayedThisTurn = 0;
     this.tickSpirit(player);
+    this.tickReactionStatuses(player);
     this.beginTurn(this.nextPlayerAfter(this.currentPlayer));
   }
 
@@ -3327,6 +3585,8 @@ export class Game {
     const topPile = own ? (this.piles.has(viewerId) ? this.pileOf(viewerId) : null) : this.pileOf(this.playerOrder[0]);
     return {
       deckMode: this.rules.deckMode,
+      // 四大陣営：選んだ陣営のID（陣営モードでなければ null）
+      faction: this.faction,
       maxMp: this.rules.maxMp,
       // MP を使うカードの種類 → 必要な MP（UI が手札に表示する）
       mpCosts: Object.fromEntries(Object.entries(this.cardDefs).map(([t, d]) => [t, this.mpCostOf({ def: d })]).filter(([, c]) => c > 0)),

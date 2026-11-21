@@ -1,0 +1,8 @@
+{
+  "knight": {
+    "stages": [
+      { "stage": 1, "name": "パラディン", "expRequired": 3, "statBonus": { "hp": 1, "attack": 1, "speed": 0 }, "abilities": [], "art": null },
+      { "stage": 2, "name": "聖騎士王", "expRequired": 6, "statBonus": { "hp": 2, "attack": 2, "speed": 0 }, "abilities": [], "art": null }
+    ]
+  }
+}

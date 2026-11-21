@@ -7,7 +7,10 @@ export const CARD_KINDS = ['soldier', 'spell', 'weapon', 'defense'];
 export const SOLDIER_ROLES = ['melee', 'archer', 'mage', 'ninja', 'guard'];
 /** 進んで城を攻める役割（speed を書く）。ninja（忍者）は進むが、相手から見えず、相手の兵士とは戦わずにすり抜ける */
 export const MOVING_ROLES = ['melee', 'ninja'];
-export const ELEMENTS = ['fire', 'water', 'wind', 'earth'];
+import { ELEMENT_IDS } from './Elements.js';
+import { COMMON_FACTION, isValidFactionId } from './Factions.js';
+/** 属性は10種のうち「無」を除く9つ（無は element を書かないこと）。火水風土氷雷闇光混沌 */
+export const ELEMENTS = ELEMENT_IDS;
 /** 精霊の種類：fire=毎ターン敵の城を攻める／water=毎ターン城を回復／wind=兵士の速さの最低値／earth=受けるダメージを軽くする */
 export const SPIRIT_KINDS = ['fire', 'water', 'wind', 'earth'];
 
@@ -130,7 +133,7 @@ export class Card {
    * cards.json の中身をチェックする。書き間違いがあれば、どこが悪いかを書いた Error を投げる。
    * （不正な「操作」は例外にしない約束だが、データの書き間違いは起動時に気づけるよう例外にする）
    */
-  static validateDefinitions(cards, rarities = null) {
+  static validateDefinitions(cards, rarities = null, { factions = null, races = null } = {}) {
     if (!cards || typeof cards !== 'object' || Array.isArray(cards)) {
       throw new Error('cards.json はカード種類をキーにしたオブジェクトにしてください');
     }
@@ -169,12 +172,43 @@ export class Card {
       if (def.deckAs !== undefined && (typeof def.deckAs !== 'string' || (rarities && (!Object.hasOwn(rarities, def.deckAs) || rarities[def.deckAs].special)))) {
         throw new Error(`${where}: deckAs（デッキ編成で数えるレアリティ）は、スペシャル以外のレアリティにしてください`);
       }
+      // 陣営・種族・進化の系統（どれも任意。一覧を渡されたときだけ、キーが合っているか確かめる）
+      // faction：陣営のID（factions.json のキー）か、全陣営共通の "common"。書かなければ旧カード（陣営なし）
+      if (def.faction !== undefined && !isValidFactionId(def.faction, factions)) {
+        throw new Error(`${where}: faction は ${factions ? [...Object.keys(factions), COMMON_FACTION].join(' / ') : '陣営のID（文字列）'} のどれかにしてください`);
+      }
+      // 合成先が別の陣営のカードにならないように（両方に faction があるときだけ。旧カードは互換のため確かめない）
+      if (def.faction !== undefined && typeof def.fuseTo === 'string' && Object.hasOwn(cards, def.fuseTo)) {
+        const to = cards[def.fuseTo];
+        if (to && to.faction !== undefined && to.faction !== def.faction) {
+          throw new Error(`${where}: 合成先「${to.name}」（${def.fuseTo}）は別の陣営です（${def.faction} → ${to.faction}）`);
+        }
+      }
+      // implemented：false なら陣営モードの候補から外す（台帳だけあって効果がまだないカード）。書かなければ true
+      if (def.implemented !== undefined && typeof def.implemented !== 'boolean') {
+        throw new Error(`${where}: implemented は true か false にしてください（書かなければ true）`);
+      }
+      // 四大陣営（PR-B）：effectPlan（まだない効果の説明）・implementationNote（実装のメモ）は文字列。Game は使わない
+      for (const key of ['effectPlan', 'implementationNote']) {
+        if (def[key] !== undefined && typeof def[key] !== 'string') throw new Error(`${where}: ${key} は文字列にしてください`);
+      }
+      // factionOnly：true なら陣営モードの候補でだけ引き当てる（陣営なしの山札・ドローの引き当て・入手券・魔物のごほうびには出ない）
+      if (def.factionOnly !== undefined && typeof def.factionOnly !== 'boolean') {
+        throw new Error(`${where}: factionOnly は true か false にしてください（書かなければ false）`);
+      }
+      if (def.race !== undefined && (typeof def.race !== 'string' || (races && !Object.hasOwn(races, def.race)))) {
+        throw new Error(`${where}: race は ${races ? Object.keys(races).join(' / ') : '種族のID（文字列）'} のどれかにしてください`);
+      }
+      if (def.evolutionLine !== undefined && (typeof def.evolutionLine !== 'string' || def.evolutionLine === '')) {
+        throw new Error(`${where}: evolutionLine は進化の系統ID（空でない文字列）にしてください`);
+      }
       if (def.mpCost !== undefined && !isCount(def.mpCost)) throw new Error(`${where}: mpCost は0以上の整数にしてください（書かなければレアリティで決まる）`);
       if (def.exhaust !== undefined && typeof def.exhaust !== 'boolean') {
         throw new Error(`${where}: exhaust は true か false にしてください（書かなければ false）`);
       }
-      if (def.element !== undefined && def.kind !== 'weapon') {
-        throw new Error(`${where}: element を書けるのは武器（kind: "weapon"）だけです`);
+      // 魔法の element は、兵士に当たったときの付着・反応（属性の反応）に使う
+      if (def.element !== undefined && def.kind !== 'weapon' && def.kind !== 'spell') {
+        throw new Error(`${where}: element を書けるのは武器（kind: "weapon"）と魔法（kind: "spell"）だけです`);
       }
       if (def.element !== undefined && def.element !== null && !ELEMENTS.includes(def.element)) {
         throw new Error(`${where}: element は ${ELEMENTS.join(' / ')} のどれかにしてください（書かなければ属性なし）`);
@@ -235,6 +269,8 @@ export class Card {
         if (!moving && def.speed !== undefined) throw new Error(`${where}: 弓兵・魔法使い（role: ${role}）は動かないので speed は書けません`);
       } else if (def.kind === 'weapon') {
         if (!isCount(def.attackBonus)) throw new Error(`${where}: attackBonus は0以上の整数にしてください`);
+      } else if (def.implemented === false && def.effect === undefined) {
+        // まだ効果がないカード（台帳だけ）：effect を省略して、effectPlan に将来の効果を書ける。手札から出せない（Game が止める）
       } else {
         const effects = EFFECTS[def.kind];
         if (!Object.hasOwn(effects, def.effect)) {

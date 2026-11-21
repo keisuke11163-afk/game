@@ -1,0 +1,11 @@
+{
+  "human": { "name": "人間", "description": "バランスのよい種族。" },
+  "elf": { "name": "エルフ", "description": "森に生きる種族。弓と魔法が得意。" },
+  "dwarf": { "name": "ドワーフ", "description": "頑丈で武具づくりが得意な種族。" },
+  "beastfolk": { "name": "獣人", "description": "素早く力強い種族。" },
+  "dragon": { "name": "ドラゴン", "description": "竜の血を引く強大な種族。" },
+  "undead": { "name": "アンデッド", "description": "倒れてもなお動く死者の種族。" },
+  "demon": { "name": "デーモン", "description": "闇の力を操る種族。" },
+  "angel": { "name": "天使", "description": "癒やしと加護をもたらす種族。" },
+  "golem": { "name": "ゴーレム", "description": "岩や鉄でできた不動の種族。" }
+}

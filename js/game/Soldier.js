@@ -40,6 +40,17 @@ export class Soldier {
     this.frozen = 0;
     /** やけど { amount, turns }（溶岩のステージ。なければ null） */
     this.burn = null;
+    /** 付着している属性 { element, turns, from }（属性の反応。from は、反応で残った付着ならその反応のID）。なければ null */
+    this.attachment = null;
+    /** 継続ダメージ { amount, turns }（感電・砂嵐の反応。盾は効かない）。なければ null */
+    this.dot = null;
+    /** 鈍足の残り回数と、下がる速さ（泥・吹雪の反応。進軍のたびに1減る） */
+    this.slow = 0;
+    this.slowAmount = 0;
+    /** この進軍で下がる速さ（進軍の始めに決まる） */
+    this.slowNow = 0;
+    /** 命中低下 { chance, turns }（霧・砂嵐の反応。この兵士の攻撃が外れることがある）。なければ null */
+    this.blind = null;
   }
 
   /** 弓兵・魔法使い（動かずに撃つ） */
@@ -106,7 +117,15 @@ export class Soldier {
       weapon: this.weapon,
       element: this.element,
       shield: this.shield,
-      statuses: { poison: this.poison ? { ...this.poison } : null, frozen: this.frozen, burn: this.burn ? { ...this.burn } : null },
+      attachment: this.attachment ? { element: this.attachment.element, turns: this.attachment.turns } : null,
+      statuses: {
+        poison: this.poison ? { ...this.poison } : null,
+        frozen: this.frozen,
+        burn: this.burn ? { ...this.burn } : null,
+        slow: this.slow,
+        blind: this.blind ? this.blind.turns : 0,
+        dot: this.dot ? { ...this.dot } : null,
+      },
     };
   }
 }

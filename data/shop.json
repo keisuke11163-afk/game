@@ -1889,6 +1889,264 @@
       "world": "kingdom",
       "desc": "ゴッドサイコロを使うときの光が「黄金」の色に。この魔法だけに効く。",
       "filter": "sepia(.8) saturate(2.5) brightness(1.15)"
+    },
+    "fxskin_flameBolt": {
+      "slot": "spellSkin",
+      "target": "flameBolt",
+      "targetName": "火炎弾",
+      "name": "火炎弾・紅蓮",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "火炎弾を使うときの光が「紅蓮」の色に。この魔法だけに効く。",
+      "filter": "saturate(1.6) hue-rotate(-15deg)"
+    },
+    "fxskin_waterJet": {
+      "slot": "spellSkin",
+      "target": "waterJet",
+      "targetName": "水流",
+      "name": "水流・蒼流",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "水流を使うときの光が「蒼流」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(160deg) saturate(1.3)"
+    },
+    "fxskin_gust": {
+      "slot": "spellSkin",
+      "target": "gust",
+      "targetName": "突風",
+      "name": "突風・翠風",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "突風を使うときの光が「翠風」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(90deg) brightness(1.1)"
+    },
+    "fxskin_tremor": {
+      "slot": "spellSkin",
+      "target": "tremor",
+      "targetName": "地鳴り",
+      "name": "地鳴り・黄土",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "地鳴りを使うときの光が「黄土」の色に。この魔法だけに効く。",
+      "filter": "sepia(.8) saturate(1.5)"
+    },
+    "fxskin_iceShard": {
+      "slot": "spellSkin",
+      "target": "iceShard",
+      "targetName": "氷の礫",
+      "name": "氷の礫・氷青",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "氷の礫を使うときの光が「氷青」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(190deg) brightness(1.2)"
+    },
+    "fxskin_sparkBolt": {
+      "slot": "spellSkin",
+      "target": "sparkBolt",
+      "targetName": "雷撃",
+      "name": "雷撃・稲妻",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "雷撃を使うときの光が「稲妻」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(50deg) saturate(2)"
+    },
+    "fxskin_shadowBolt": {
+      "slot": "spellSkin",
+      "target": "shadowBolt",
+      "targetName": "闇弾",
+      "name": "闇弾・深淵",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "闇弾を使うときの光が「深淵」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_holyRay": {
+      "slot": "spellSkin",
+      "target": "holyRay",
+      "targetName": "聖光線",
+      "name": "聖光線・白金",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "聖光線を使うときの光が「白金」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(20deg) brightness(1.4)"
+    },
+    "fxskin_chaosVortex": {
+      "slot": "spellSkin",
+      "target": "chaosVortex",
+      "targetName": "混沌の渦",
+      "name": "混沌の渦・極彩",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "混沌の渦を使うときの光が「極彩」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(300deg) saturate(2.5)"
+    },
+    "skin_king_cavalry_legendary": {
+      "slot": "charSkin",
+      "target": "king_cavalry_legendary",
+      "targetName": "グランドパラディン",
+      "name": "グランドパラディン・白金",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "グランドパラディンの見た目が「白金」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_king_priest_common": {
+      "slot": "charSkin",
+      "target": "king_priest_common",
+      "targetName": "見習い聖術師",
+      "name": "見習い聖術師・白金",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "見習い聖術師の見た目が「白金」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_king_priest_uncommon": {
+      "slot": "charSkin",
+      "target": "king_priest_uncommon",
+      "targetName": "聖術師",
+      "name": "聖術師・白金",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "聖術師の見た目が「白金」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_king_priest_rare": {
+      "slot": "charSkin",
+      "target": "king_priest_rare",
+      "targetName": "神官",
+      "name": "神官・白金",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "神官の見た目が「白金」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_king_priest_epic": {
+      "slot": "charSkin",
+      "target": "king_priest_epic",
+      "targetName": "大神官",
+      "name": "大神官・白金",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "大神官の見た目が「白金」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_king_priest_legendary": {
+      "slot": "charSkin",
+      "target": "king_priest_legendary",
+      "targetName": "セラフィム",
+      "name": "セラフィム・白金",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "セラフィムの見た目が「白金」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(20deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "fxskin_king_light_spell_common": {
+      "slot": "spellSkin",
+      "target": "king_light_spell_common",
+      "targetName": "ルミナ",
+      "name": "ルミナ・白金",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ルミナを使うときの光が「白金」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(20deg) brightness(1.4)"
+    },
+    "fxskin_king_light_spell_uncommon": {
+      "slot": "spellSkin",
+      "target": "king_light_spell_uncommon",
+      "targetName": "ホーリーレイ",
+      "name": "ホーリーレイ・白金",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ホーリーレイを使うときの光が「白金」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(20deg) brightness(1.4)"
+    },
+    "fxskin_king_light_spell_rare": {
+      "slot": "spellSkin",
+      "target": "king_light_spell_rare",
+      "targetName": "プリズムバースト",
+      "name": "プリズムバースト・白金",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "プリズムバーストを使うときの光が「白金」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(20deg) brightness(1.4)"
+    },
+    "fxskin_king_light_spell_epic": {
+      "slot": "spellSkin",
+      "target": "king_light_spell_epic",
+      "targetName": "セラフィックレイ",
+      "name": "セラフィックレイ・白金",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "セラフィックレイを使うときの光が「白金」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(20deg) brightness(1.4)"
+    },
+    "fxskin_king_light_spell_legendary": {
+      "slot": "spellSkin",
+      "target": "king_light_spell_legendary",
+      "targetName": "ディヴァインノヴァ",
+      "name": "ディヴァインノヴァ・白金",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ディヴァインノヴァを使うときの光が「白金」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(20deg) brightness(1.4)"
     }
   }
 }

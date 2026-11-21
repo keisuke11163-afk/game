@@ -65,7 +65,7 @@ test('部屋主：最初に入った人。モードは部屋主だけが選べ�
   assert.equal(a.room.action(a.seat, 'setRules', [{ winCondition: 'nope' }]).ok, false);
   assert.equal(a.room.action(a.seat, 'setRules', [{ castleMaxHp: 1 }]).ok, false);
   assert.equal(a.room.action(a.seat, 'setRules', [{ winCondition: 'lastStanding', deckMode: 'own' }]).ok, true);
-  assert.deepEqual(b.lastRoom().settings, { winCondition: 'lastStanding', deckMode: 'own', teams: 'off', castleHp: loadData().rules.castleMaxHp, stage: 'random' });
+  assert.deepEqual(b.lastRoom().settings, { winCondition: 'lastStanding', deckMode: 'own', teams: 'off', castleHp: loadData().rules.castleMaxHp, stage: 'random', faction: null });
   const ids = (list) => list.map((x) => x.id);
   assert.deepEqual(ids(b.lastRoom().choices.winConditions), ['firstDestroy', 'lastStanding']);
   assert.deepEqual(ids(b.lastRoom().choices.deckModes), ['shared', 'own', 'cost']);

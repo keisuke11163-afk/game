@@ -85,12 +85,37 @@ export function validateRarities(rarities) {
 }
 
 /**
+ * 候補（allowed）に入るカードだけにする。allowed は種類の Set か、(type, def) => boolean。省略（null）ならそのまま
+ * （陣営モードの候補。四大陣営 PR-A。cards.json 全体は絞らず、種類を選ぶところだけで使う）
+ */
+export function pickCards(cards, allowed = null) {
+  if (!allowed) return cards;
+  const has = typeof allowed === 'function' ? allowed : (type) => allowed.has(type);
+  return Object.fromEntries(Object.entries(cards).filter(([type, def]) => has(type, def)));
+}
+
+/**
+ * 引き当てに使えるカードか（四大陣営 PR-B）。
+ * implemented: false（効果がまだないカード）は、どのモードでも引き当てない。
+ * factionOnly: true（台帳から足した陣営のカード）は、候補（allowed）を渡したとき＝陣営モードでだけ引き当てる
+ * （陣営なしの山札・運命の祈り・入手券・魔物のごほうびは今までと同じになる）
+ */
+export function isDrawable(def, hasPool = false) {
+  if (!def || def.implemented === false) return false;
+  return hasPool || def.factionOnly !== true;
+}
+
+/**
  * カードごとの排出率（%）。レアリティの dropRate を、同じレアリティのカードの weight（省略すると1）で分ける。
  * そのレアリティのカードが1枚もなければ、その分は残りのレアリティに按分する。
+ * allowed（候補）を渡すと、候補の中だけで計算する（候補の外のカードは結果に入らない）。
  */
-export function dropRates(cards, rarities, boost = null) {
+export function dropRates(cards, rarities, boost = null, allowed = null) {
+  cards = pickCards(cards, allowed);
+  // 引き当てに使えないカード（isDrawable）は weight 0 と同じ（結果には 0 で入る）
+  const weightOf = (def) => (isDrawable(def, Boolean(allowed)) ? (def.weight ?? 1) : 0);
   const sums = {};
-  for (const def of Object.values(cards)) sums[def.rarity] = (sums[def.rarity] ?? 0) + (def.weight ?? 1);
+  for (const def of Object.values(cards)) sums[def.rarity] = (sums[def.rarity] ?? 0) + weightOf(def);
   // boost: { from: レアリティ, multiplier } … from 以上のレアリティの割合を multiplier 倍にして、全体を100%に直す
   const order = chainOrder(rarities);
   const factor = (id) => (boost && order.indexOf(id) >= order.indexOf(boost.from) ? boost.multiplier : 1);
@@ -99,19 +124,24 @@ export function dropRates(cards, rarities, boost = null) {
   const rates = {};
   for (const [type, def] of Object.entries(cards)) {
     const r = rarities[def.rarity];
-    rates[type] = sums[def.rarity] > 0 && total > 0 ? ((r.dropRate * factor(def.rarity) / total) * 100 * (def.weight ?? 1)) / sums[def.rarity] : 0;
+    rates[type] = sums[def.rarity] > 0 && total > 0 ? ((r.dropRate * factor(def.rarity) / total) * 100 * weightOf(def)) / sums[def.rarity] : 0;
   }
   return rates;
 }
 
 /** 排出率どおりに size 枚を引き当てる（rng を使うので、シードで固定できる） */
-export function sampleDeckTypes(cards, rarities, size, rng) {
-  return Array.from({ length: size }, () => sampleType(cards, rarities, rng));
+export function sampleDeckTypes(cards, rarities, size, rng, allowed = null) {
+  // allowed（陣営モードの候補）はそのまま渡す（候補の中では factionOnly のカードも引き当てる）
+  const pool = pickCards(cards, allowed);
+  const types = Array.from({ length: size }, () => sampleType(pool, rarities, rng, null, allowed));
+  if (types.includes(null)) throw new Error('山札に入れられるカードがありません');
+  return types;
 }
 
 /** 排出率どおりに1種類を引き当てる（boost を渡すと、その分だけ高いレアリティが出やすい） */
-export function sampleType(cards, rarities, rng, boost = null) {
-  const entries = Object.entries(dropRates(cards, rarities, boost)).filter(([, v]) => v > 0);
+export function sampleType(cards, rarities, rng, boost = null, allowed = null) {
+  const entries = Object.entries(dropRates(cards, rarities, boost, allowed)).filter(([, v]) => v > 0);
+  if (entries.length === 0) return null; // 候補が空（引けるカードがない）
   const total = entries.reduce((n, [, v]) => n + v, 0);
   let x = rng() * total;
   for (const [type, v] of entries) {
@@ -120,9 +150,9 @@ export function sampleType(cards, rarities, rng, boost = null) {
   return entries[entries.length - 1][0];
 }
 
-/** 指定したレアリティのカードを、weight の重みで1種類引き当てる（そのレアリティのカードがなければ null） */
-export function sampleTypeOfRarity(cards, rarity, rng) {
-  const entries = Object.entries(cards).filter(([, d]) => d.rarity === rarity && (d.weight ?? 1) > 0);
+/** 指定したレアリティのカードを、weight の重みで1種類引き当てる（そのレアリティのカードがなければ null。allowed は候補） */
+export function sampleTypeOfRarity(cards, rarity, rng, allowed = null) {
+  const entries = Object.entries(pickCards(cards, allowed)).filter(([, d]) => d.rarity === rarity && (d.weight ?? 1) > 0 && isDrawable(d, Boolean(allowed)));
   const total = entries.reduce((n, [, d]) => n + (d.weight ?? 1), 0);
   if (total <= 0) return null;
   let x = rng() * total;
@@ -133,20 +163,21 @@ export function sampleTypeOfRarity(cards, rarity, rng) {
 }
 
 /** base の1つ上のレアリティ（そのレアリティのカードがあるものだけ）。なければ null */
-export function nextRarityWithCards(cards, rarities, base) {
+export function nextRarityWithCards(cards, rarities, base, allowed = null) {
+  cards = pickCards(cards, allowed);
   const order = chainOrder(rarities);
   if (!order.includes(base)) return null;
   const next = order[order.indexOf(base) + 1];
   if (next === undefined) return null;
-  return Object.values(cards).some((d) => d.rarity === next && (d.weight ?? 1) > 0) ? next : null;
+  return Object.values(cards).some((d) => d.rarity === next && (d.weight ?? 1) > 0 && isDrawable(d, Boolean(allowed))) ? next : null;
 }
 
 /**
  * 魔物のごほうびの内訳（%）。ラッキー（chance の確率）で1つ上のレアリティになる。
  * @returns {{rarity: string, rate: number, lucky: boolean}[]}
  */
-export function rewardOdds(cards, rarities, base, chance = 0) {
-  const next = chance > 0 ? nextRarityWithCards(cards, rarities, base) : null;
+export function rewardOdds(cards, rarities, base, chance = 0, allowed = null) {
+  const next = chance > 0 ? nextRarityWithCards(cards, rarities, base, allowed) : null;
   if (!next) return [{ rarity: base, rate: 100, lucky: false }];
   return [
     { rarity: base, rate: (1 - chance) * 100, lucky: false },
@@ -170,9 +201,10 @@ export function deckCostOf(def, rarities) {
   return rarities[deckRarityOf(def, rarities)]?.deckCost ?? 0;
 }
 
-/** デッキに入れられるカードか（魔物の駒は倒したごほうび専用なので入れられない） */
+/** デッキに入れられるカードか（魔物の駒は倒したごほうび専用なので入れられない。implemented: false も入れられない） */
 export function isDeckable(def) {
-  return def.monster === undefined;
+  // 効果がまだないカード（implemented: false）も入れられない（出せないカードが山札に入らないように）
+  return def.monster === undefined && def.implemented !== false;
 }
 
 /**

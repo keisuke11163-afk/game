@@ -7,6 +7,11 @@ export const ELEMENT_LOOK = {
   water: { name: '水', icon: '💧', iconName: 'water', color: '#38bdf8' },
   wind: { name: '風', icon: '🌀', iconName: 'wind', color: '#34d399' },
   earth: { name: '土', icon: '⛰️', iconName: 'earth', color: '#b08850' },
+  ice: { name: '氷', icon: '❄️', iconName: 'ice', color: '#7dd3fc' },
+  thunder: { name: '雷', icon: '⚡', iconName: 'thunder', color: '#facc15' },
+  dark: { name: '闇', icon: '🌑', iconName: 'dark', color: '#7c5cbf' },
+  light: { name: '光', icon: '✨', iconName: 'light', color: '#fde68a' },
+  chaos: { name: '混沌', icon: '🌀', iconName: 'chaos', color: '#c026d3' },
 };
 
 /** 兵士の駒に出す文字（なければカード名の1文字目） */
@@ -25,6 +30,11 @@ export const WEAPON_ICON = {
   windBow: '🏹',
   earthHammer: '🔨',
   ironSword: '⚔️',
+  iceBlade: '🗡️',
+  thunderAxe: '🪓',
+  darkScythe: '🌙',
+  lightLance: '🔱',
+  chaosStaff: '🪄',
 };
 
 /** 魔物の絵文字 */

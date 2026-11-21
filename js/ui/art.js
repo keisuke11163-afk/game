@@ -388,6 +388,12 @@ function svgCardArt(type, color = 'blue', name = '') {
 // ---------- 小さな記号 ----------
 
 const ICONS = {
+  // 氷・雷・闇・光・混沌の属性の仮の記号（専用の絵ができたら PNG_ICONS に足して差しかえる）
+  ice: `<path d="M12 2 L15 9 L22 12 L15 15 L12 22 L9 15 L2 12 L9 9 Z" fill="#a5e4ff" ${S} stroke-width="2"/>`,
+  thunder: `<path d="M13 2 L5 13 H11 L9 22 L19 9 H13 Z" fill="#ffd84a" ${S} stroke-width="2"/>`,
+  dark: `<path d="M15 3 Q5 4 5 13 Q6 21 15 21 Q8 18 9 11 Q10 6 15 3 Z" fill="#6a4c93" ${S} stroke-width="2"/>`,
+  light: `<circle cx="12" cy="12" r="5" fill="#fff3a0" ${S} stroke-width="2"/><path d="M12 1 V5 M12 19 V23 M1 12 H5 M19 12 H23" ${S} stroke-width="2" stroke-linecap="round"/>`,
+  chaos: `<circle cx="12" cy="12" r="9" fill="#b04fd8" ${S} stroke-width="2"/><path d="M12 3 Q4 9 12 12 Q20 15 12 21" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>`,
   heart: `<path d="M12 21 Q1 13 3 7 Q5 2 9 4 Q11 5 12 7 Q13 5 15 4 Q19 2 21 7 Q23 13 12 21 Z" fill="#f2566e" ${S} stroke-width="2"/>`,
   sword: `<path d="M5 19 L17 5 L20 4 L19 7 L7 21 Z" fill="#eef3f7" ${S} stroke-width="2"/><path d="M4 14 L10 20" ${S} stroke-width="3.4"/><path d="M4 14 L10 20" stroke="#f2c14e" stroke-width="1.4" stroke-linecap="round"/>`,
   boot: `<path d="M8 3 h7 v10 q6 1 6 6 v2 H6 Z" fill="#b98250" ${S} stroke-width="2"/>`,

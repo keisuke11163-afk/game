@@ -1,4 +1,5 @@
 import { UI_CONFIG } from './config.js';
+import { DEFAULT_ELEMENTS } from '../game/Elements.js';
 const el=(tag,cls,text)=>{const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;};
 export function soldierFamilies(cards){
   return UI_CONFIG.soldierFamilies.map(family=>{const types=[],seen=new Set();let type=family.root;while(cards[type]?.kind==='soldier'&&!seen.has(type)){seen.add(type);types.push(type);type=cards[type].fuseTo;}return {...family,types};});
@@ -17,7 +18,7 @@ export function renderHelp({cards,rules,monsters,rarities}){
   const note=box.querySelector('.help-note');
   const details=(title)=>{const section=el('details','help-more');section.append(el('summary','',title));note.before(section);return section;};
   const elements=box.querySelector('.element-guide');
-  const attributes=details('属性の強弱を見る');attributes.append(elements,el('p','','水→火→風→土→水。矢印の先の属性に強い。武器で兵士の属性を変えられる。'));
+  const attributes=details('属性の強弱を見る');attributes.append(elements,el('p','',`矢印の先の属性に強い（ダメージ${DEFAULT_ELEMENTS.multipliers.advantage}倍）：水→火・土、火→氷、氷→水、風→火、土→雷・風、雷→水、光⇄闇。逆向きは弱い（${DEFAULT_ELEMENTS.multipliers.disadvantage}倍。光と闇は互いに強いだけ）。混沌と属性なしは相性なし。武器で兵士の属性を変えられる。`));
   const monster=details('魔物の駒とごほうび');
   monster.append(el('p','',monsters?`放置すると城を繰り返し攻める${rules.monsterEvolveEvery>0?`。${rules.monsterEvolveEvery}周ごとにレアリティが上がって強くなる`:''}${rules.monsterAttackGrowth>0?`。攻めるたびにダメージがさらに+${rules.monsterAttackGrowth}`:''}。兵士や城への魔法で倒そう。`:'魔物はこの対戦では出現しません。'),el('p','','とどめを刺すと、倒した魔物が兵士カードとして手札に入ります。魔物によっては、ごほうびのカードももう1枚もらえます。'));
   if(rules.rewardLuckyChance>0)monster.append(el('p','',`ラッキーは${Math.round(rules.rewardLuckyChance*100)}%。当たると1つ上のレアリティ（${Object.values(rarities??{}).at(-1)?.name??'最高レアリティ'}はそのまま）。`));

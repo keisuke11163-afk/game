@@ -103,8 +103,11 @@ js/
     Road.js        … 道（となりの席どうし・広場の通り道）
     Monster.js     … 魔物と、強化のデータのチェック
     Weather.js     … 天候のデータのチェック
+    Elements.js    … 属性の相性表のチェックと倍率
+    Reactions.js   … 属性の反応のデータのチェックと、組から反応を探す
     Stage.js       … ステージ（マップ）のデータのチェックと選び方
-    Setup.js       … 城の種類・デッキのデータのチェックと、山札1組（Pile）
+    Setup.js       … 城の種類・デッキのデータのチェックと、山札1組（Pile）。カードの引き当て（候補 allowed で絞れる）
+    Factions.js    … 四大陣営：factions.json のチェックと、陣営モードの候補（「四大陣営（PR-A）」の節）
     visibility.js  … オンラインで、イベントをプレイヤーごとに隠す決まり
     strategies.js  … 戦い方（random / aggro / smart / defensive / rush / guard / pass）。シミュレーションと CPU が使う
   ui/              … 画面表示と入力
@@ -121,6 +124,7 @@ js/
     CardGL.js      … 拡大表示のカードを、Blender 製の板（assets/models/card-slab.glb）と three.js で描く。凹凸は枠の高さの地図から作った本物のメッシュ（光・影・金属の映り込みは three.js）。宝石は内側から光り、金属・宝石の上に向きと時間で瞬く星形の粒（キラキラ）を散らす。ランク報酬の裏（`assets/skins/back-rank-*-relief.png`）も同じくメッシュ。偏光は CardRelief.js と同じ色。読めないときは Card3D.js（CSS の 3D）のまま。`?card3d=css` か `?fx=lite` で CSS に固定
     stories.js     … 図鑑で読むカードのストーリー（画面だけで使う文。カードを増やしたら1つ足す。ui-tests/stories.js が確かめる）
     card-shapes.js … カードの枠・ランクの裏の凹凸を、色ではなく形の部品（外形・はみ出す飾り・帯・メダル・宝石のカット・紋章の輪と葉）で組み立てる。位置は絵を測って書いた。build-card-relief.js が使う（宝石を足した・動かしたときはここを直す）
+    stories-factions.js … 四大陣営の台帳から足したカードのストーリー（自動生成。docs/four-factions/import/build.mjs）
     art.js・config.js … 画像の割り当てと、UIの数値（CPUの強さの割り当ても）
     precache.js    … オフライン用の一覧（自動生成。node js/ui/build-precache.js）
 data/
@@ -134,8 +138,10 @@ data/
   weather.json     … 天候（晴れ・雨・大雨・霧・嵐・砂嵐・コインの雨）
   stages.json      … ステージ（草原・溶岩・氷・古代遺跡・闇の森・砂漠）
   stamps.json      … チャットのスタンプの一覧
+  elements.json    … 属性の相性
+  reactions.json   … 属性の反応（「属性の反応」の節）
 ui-tests/          … 画面のスモークテスト（node ui-tests/smoke.js。Playwright は環境にあるものを使う。UI担当）
-docs/              … 設計メモ。archive/ は終わった依頼（Codex 向けのプロンプトなど）
+docs/              … 設計メモ。archive/ は終わった依頼（Codex 向けのプロンプトなど）。four-factions/ は四大陣営の仕様書・台帳と、取り込みの道具（import/）
 tests/             … 自動テスト（node --test）。Node.js だけで動く
   helpers.js       … data/ と fixtures/ の読み込み、シード付き乱数、イベントの記録
   fixtures/        … テスト用の固定データ（data/ を調整してもロジックのテストが落ちないように）
@@ -190,14 +196,17 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 - カードID（cardId）：山札の1枚1枚につく一意のID。例：`"c07"`。同じ種類のカードでもIDは別
 - 兵士ID（soldierId）：場に出た兵士につく一意のID。例：`"s03"`
 - カードIDは山札をシャッフルしたあとの順に振る。IDから種類は分からない
+- 付着（attachment）：兵士に残っている属性（`"fire"` などの属性ID か、水霧 `"mist"`）。属性つきの攻撃が当たると付き、別の属性で攻撃されると「反応」が起きる（「属性の反応」の節）
+- 反応ID（reaction）：`data/reactions.json` の `reactions` のキー。例：`"evaporate"`（蒸発）
 - 道ID（roadId）：道のID。2人のIDを席順で `-` でつなぐ（3人以上の広場のときは、2人ずつの組の「通り道」。STEP 5 の「真ん中の広場を通る道」）。例：`"p1-p2"`。`rules.laneCount`（レーンの数）が2以上のときは、同じ2人の間に道が `laneCount` 本でき、`"p1-p2#1"`、`"p1-p2#2"` … のように番号がつく（1本のときは番号なし）
+- 陣営（faction）：カードの所属。`"kingdom"` / `"forest"` / `"demon"` / `"dragon"`（`data/factions.json` のキー）か、全陣営共通の `"common"`。書いていないカードは旧カード（陣営なし）。陣営モード（`setup.faction`）の山札は「選んだ陣営＋共通」だけ（「四大陣営（PR-A）」の節）
 - 対象（target）：カードを出す先。`{ playerId }`（兵士は送り込む相手、攻撃の魔法は攻める相手、ヒール・城壁は自分）、`{ playerId, roadId }`（レーンが2本以上のときの、兵士を出す道と、`scope: "lane"` の魔法で狙う道）、`{ soldierId }`（武器・盾：道の上の自分の兵士）、`{ monsterId }`（ファイアボールで魔物を狙う）
 
 ### UIから呼ぶもの
 
 | メソッド | 説明 |
 |---|---|
-| `new Game({ cards, rules, rng, monsters, upgrades, castles, decks, stages, setup })` | ゲームを作る。`stages`（`data/stages.json`）を渡すと、`setup.stage`（ステージのIDか `"random"`。省略すると `"random"`）のステージで遊ぶ。`cards` / `rules` / `monsters` / `upgrades` / `castles` / `decks` は `data/` の JSON の中身（Game はファイルを読まない）。`cards` / `rules` 以外は省略でき、省略すると魔物は出ず・強化は買えず・城の種類はなし。`setup` は席ごとの選択 `{ castles: [...], decks: [...] }`（省略すると `rules.defaultCastle` / `rules.defaultDeck`）。`rng` は 0以上1未満を返す乱数で、省略すると `Math.random`。作った時点で初期手札は配られていて、`phase` は `"ready"`。イベントは出さない |
+| `new Game({ cards, rules, rng, monsters, upgrades, castles, decks, stages, elements, reactions, factions, setup })` | ゲームを作る。`factions`（`data/factions.json`）を渡すと、カードの `faction` が陣営のIDか `"common"` かを確かめ、`setup.faction`（陣営のID。省略・`null` なら陣営なし＝今までどおり全カード）で陣営モード（共有山札だけ。「四大陣営（PR-A）」の節）になる。`reactions`（`data/reactions.json`）を渡すと属性の反応が起きる（省略すると反応も付着もない）。`stages`（`data/stages.json`）を渡すと、`setup.stage`（ステージのIDか `"random"`。省略すると `"random"`）のステージで遊ぶ。`cards` / `rules` / `monsters` / `upgrades` / `castles` / `decks` は `data/` の JSON の中身（Game はファイルを読まない）。`cards` / `rules` 以外は省略でき、省略すると魔物は出ず・強化は買えず・城の種類はなし。`setup` は席ごとの選択 `{ castles: [...], decks: [...] }`（省略すると `rules.defaultCastle` / `rules.defaultDeck`）。`rng` は 0以上1未満を返す乱数で、省略すると `Math.random`。作った時点で初期手札は配られていて、`phase` は `"ready"`。イベントは出さない |
 | `game.start()` | ゲームを始める。全イベントを `on()` で購読してから呼ぶと、先攻（`setup.firstPlayer`。省略すると p1）のターン1が始まる（`turnStarted` → ドロー → 進軍）。`rules.mulligan` が `true` なら、先に `phase` が `"mulligan"` になり、全員が `mulligan()` を選んでからターン1 |
 | `game.mulligan(playerId, cardIds)` | マリガン（`phase` が `"mulligan"` のときだけ。1人1回。自分の番でなくてよい）。`cardIds`（0枚でもよい）を山札に戻してシャッフルし、同じ枚数を引き直す。全員が選んだら先攻のターン1が始まる |
 | `game.getState(viewerId)` | 今の状態をただのオブジェクトで返す。`viewerId` の手札は中身まで、相手の手札は枚数だけ入る |
@@ -237,6 +246,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
 ```js
 {
   deckMode: "shared",          // "shared"（全員共通の山札）| "own"（1人1つ）
+  faction: null,               // 陣営モードの陣営ID（"kingdom" など）か null（「四大陣営（PR-A）」）
   playerOrder: ["p1", "p2"],   // 席順（手番の順）。p1〜p8
   round: 2,                    // 周回（席順の最初の人のターンが始まるたびに1増える。start() の前は 0）
   monsters: [{ monsterId: "m01", type: "slime", roadId: "p1-p2", square: 1, hp: 4, maxHp: 4, attack: 1, element: "water", attackIn: 3, reward: 2, castleAttack: 2 }],
@@ -256,6 +266,7 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
       hand: [{ cardId: "c07", type: "infantry" }],  // viewer 本人のみ。相手は null
       handCount: 7,
       playedThisTurn: false,   // このターンにメインのカードを出したか
+      reactionsThisTurn: 0,    // このターンに起こした属性の反応の回数（自分のターンの始めに0へ）
       eliminated: false,       // 負けて抜けたか（3人以上のときに使う。2人ならいつも false）
       cardsPlayedThisTurn: 2,  // このターンに出した枚数（メイン・付加・防御すべて）
       armor: 0,                // 城壁の残り
@@ -269,7 +280,12 @@ UIはゲームの状態を直接書き換えない。必ず Game のメソッド
         weapon: "waterSpear",  // 持っている武器のカード種類か null
         element: "water",      // "fire" | "water" | "wind" | "earth" | null
         shield: 0,             // 盾の残り
-        statuses: { poison: { amount: 1, turns: 2 } /* か null */, frozen: 0 /* 凍結の残り回数 */ }
+        attachment: { element: "fire", turns: 2 },  // 付着（属性の反応）か null。水霧なら element は "mist"
+        statuses: {
+          poison: { amount: 1, turns: 2 } /* か null */, frozen: 0 /* 凍結の残り回数 */,
+          burn: null /* やけど { amount, turns } */, slow: 0 /* 鈍足の残り回数 */, blind: 0 /* 命中低下の残りターン */,
+          dot: null /* 継続ダメージ { amount, turns } */
+        }
       }]
     },
     p2: { /* 同じ形 */ }
@@ -306,7 +322,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `soldierDeployed` | `{ playerId, soldierId, type, roadId, targetId, position, hp, attack }` … `hp` / `attack` は出した時点の値 |
 | `soldierMoved` | `{ playerId, soldierId, roadId, from, to, cause?, slipped? }` … `cause` は押し戻されたときだけ `"pushed"`（ゲイルフォース。`to` が `from` より小さい）。`slipped: true` は氷のステージで滑って1マス余分に進んだとき |
 | `soldiersClashed` | `{ attacker: { playerId, soldierId }, defender: { playerId, soldierId }, roadId, square }` … 道の上で兵士同士がぶつかった。`attacker` は進軍中の側。`square` は**攻める側が止まったマス**の道のマス番号（1マス先の相手と戦うときも攻める側のマス） |
-| `soldierDamaged` | `{ playerId, soldierId, amount, hp, cause, blocked }` … `cause` は `"fight"` / `"spell"` / `"poison"` / `"shot"`（弓兵・魔法使いに撃たれた）/ `"burn"`（やけど）/ `"heat"`（溶岩の灼熱）/ `"eruption"`（噴火）。`blocked` は盾が受けた量（`amount` は与えようとしたダメージ） |
+| `soldierDamaged` | `{ playerId, soldierId, amount, hp, cause, blocked }` … `cause` は `"fight"` / `"spell"` / `"poison"` / `"shot"`（弓兵・魔法使いに撃たれた）/ `"burn"`（やけど）/ `"heat"`（溶岩の灼熱）/ `"eruption"`（噴火）/ `"dot"`（反応の継続ダメージ）/ `"reaction"`（反応の巻き添え）。`blocked` は盾が受けた量（`amount` は与えようとしたダメージ） |
 | `soldierDestroyed` | `{ playerId, soldierId, reason }` … `reason` は `"killed"` / `"reachedCastle"` / `"eliminated"`（持ち主が抜けた）/ `"roadClosed"`（道がなくなった）/ `"returned"`（弓兵・魔法使いが帰った） |
 | `soldierShot` | `{ playerId, soldierId, role, target, amount }` … 弓兵・魔法使いが撃った。`target` は `{ kind: "soldier", playerId, soldierId }` / `{ kind: "monster", monsterId }` / `{ kind: "castle", playerId }`。このあと `soldierDamaged`（`cause: "shot"`）／`monsterDamaged` …／`castleDamaged`（`source: { kind: "soldier", soldierId }`） |
 | `spellCast` | `{ playerId, type, target, targetKind, roadId? }` … `roadId` は、レーンを選んだ魔法（`scope: "lane"`）のときだけ入る。 `target` は効果を受けるプレイヤーIDか魔物IDの**文字列**、`targetKind` は `"player"` か `"monster"`（`playCard` に渡す `target` のオブジェクトとは形が違う）（ファイアボール・サンダーは相手、ヒールは自分） |
@@ -316,7 +332,7 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `shieldAdded` | `{ playerId, soldierId, amount, shield }` … `shield` は足したあとの盾 |
 | `castleArmored` | `{ playerId, armor }` … 城壁を置いた |
 | `armorExpired` | `{ playerId }` … 城壁が消えた（その人のターンの始め） |
-| `statusApplied` | `{ playerId, soldierId, status, turns }` … `status` は `"poison"` か `"frozen"` |
+| `statusApplied` | `{ playerId, soldierId, status, turns }` … `status` は `"poison"` / `"frozen"` / `"burn"`（やけど）/ `"slow"`（鈍足。`amount` 付き）/ `"blind"`（命中低下。`chance` 付き）/ `"dot"`（継続ダメージ。`amount` 付き） |
 | `statusCleared` | `{ playerId, soldierId, status }` |
 | `roundStarted` | `{ round }` … 周回の始め（`turnStarted` のすぐあと） |
 | `monsterAppeared` | `{ monsterId, type, roadId, square, hp, attack, element }` |
@@ -341,6 +357,8 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 | `spiritEnded` | `{ playerId, type, reason }` … `reason` は `"expired"`（終わった）か `"replaced"`（ほかの精霊に入れ替わった） |
 | `mpChanged` | `{ playerId, delta, mp, reason }` … `reason` は `"cast"`（魔法・精霊で使った）／`"card"`（マナ回復）／`"drained"`（MPドレインで奪われた）／`"drain"`（MPドレインで奪った）。上限や0で止まったぶんは `delta` に含まない |
 | `monsterEvolved` | `{ monsterId, rewardRarity, hp, maxHp, attack, castleAttack, count }` … 放置された魔物が強くなった（`count` は強くなった回数）。`monsterAppeared` の後の周回の始め、魔物の城への攻撃のあと |
+| `attachmentChanged` | `{ playerId, soldierId, element, turns, cause }` … 兵士の付着が変わった。`element` が `null` なら消えた。`cause` は `"hit"`（属性つきの攻撃が当たった）／`"reaction"`（反応で変わった・消えた）／`"expired"`（期限で消えた） |
+| `reactionTriggered` | `{ attackerId, playerId, soldierId, reaction, name, attached, element, multiplier, chain?, chaos? }` … 属性の反応が起きた。`playerId` / `soldierId` は標的、`attached` は使った付着（凍結中は `"ice"`、やけど中は `"fire"`、水霧は `"mist"`）、`element` は攻撃の属性、`multiplier` は倍率（ないなら `null`）。`chain` は、反応で残った付着から続けて起きたとき、前の反応のID。`chaos: true` は混沌でランダムに選ばれた |
 | `gameOver` | `{ winner, reason }` … `reason` は `"castleDestroyed"` / `"lastStanding"` / `"roundLimit"` / `"surrender"`（降参） |
 
 #### イベントの順番
@@ -353,6 +371,9 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   - 戦いで相手だけが消えて進み続けるとき（`advanceAfterWin`）：上の戦いのイベントのあと、続きの `soldierMoved`（さっき止まったマスから）→（また相手に会えば）`soldiersClashed` …、城に着けば `castleDamaged` → `soldierDestroyed`（`"reachedCastle"`）。1体の兵士の `soldierMoved` が1回の進軍で2回以上出ることがある
   - 進軍の途中で城HPが0以下になったら、残りの兵士は動かさずにすぐ `gameOver` を出す
 - 進軍（STEP 2）：1体ずつ「毒の `soldierDamaged`（`cause: "poison"`）→（0なら `soldierDestroyed` で、動かない）→（凍結なら休んで、0回になったら `statusCleared`）→ 動く」
+  - 属性の反応があるとき：毒 → やけど → 継続ダメージ（`cause: "dot"`）→ 鈍足の残りが1減る → 凍結 → 動く
+- 属性の反応：攻撃の `reactionTriggered` → その攻撃の `soldierDamaged`（倍率を掛けたあと）→（0なら `soldierDestroyed`）→ 付着の `attachmentChanged`（`cause: "reaction"`）→ 特殊効果（`statusApplied`・巻き添えの `soldierDamaged`（`cause: "reaction"`）…）。兵士同士の戦いでは、`soldiersClashed` → `reactionTriggered` → `soldierDamaged`（守る側）→ `soldierDamaged`（攻める側）→ `soldierDestroyed` → 付着・特殊効果（守る側への攻撃 → 攻める側への攻撃の順）。反応が起きなければ、`soldierDamaged` のあとに付着の `attachmentChanged`（`cause: "hit"`）
+- ターンの終わり（属性の反応があるとき）：手番の人の兵士の命中低下・付着の残りが1減る（0なら `statusCleared`（`"blind"`）／`attachmentChanged`（`cause: "expired"`））→ 次の人の `turnStarted`
 - 強化を買ったとき：`coinsChanged`（`reason: "upgrade"`）→ `upgradeBought` → 効果のイベント
 - 周回の始め（席順の最初の人のターン）：`turnStarted` → `roundStarted` → 放置された魔物の `monsterAttackedCastle`（出た順）→ `monsterAppeared`（道の順）→ 城壁の `armorExpired` → ドロー → 進軍。魔物の攻撃で城HPが0以下になったら、`monsterAttackedCastle` → `gameOver` で止まる（落とされた方の負け）
 - 兵士と魔物の戦い：`soldierMoved`（動いたら）→ `monsterClashed` → `monsterDamaged` → `soldierDamaged`（兵士）→（魔物が0なら）`monsterDefeated` → `coinsChanged` →（兵士が0なら）`soldierDestroyed`。1マスごとに相手の兵士 → 魔物の順に確かめる
@@ -387,7 +408,6 @@ UIはこれを受けてアニメーションする。イベントを増やすと
   "laneCount": 3,
   "advanceAfterWin": false,
   "soldierCastleDamageMultiplier": 2,
-  "elementBonus": 2,
   "monsterFirstRound": 3,
   "monsterCooldownRounds": 2,
   "monsterSpawnChance": 0.35
@@ -412,8 +432,8 @@ UIはこれを受けてアニメーションする。イベントを増やすと
 - `laneCount`：同じ2人の間の道（レーン）の本数（1〜5。省略すると1）。兵士は出すときにどのレーンに出すかを選び、**兵士同士が戦うのは同じレーンの上だけ**。**魔物は2人の間に1体だけ**（どのレーンに出るかはランダム）。魔物のいないレーンの兵士は、魔物に止められず城へ進める。魔物を倒したあとの `monsterCooldownRounds` は、2人の間全体にかかる
 - カードの `scope`（`damageEnemySoldiers` / `poisonEnemySoldiers` / `freezeEnemySoldiers` の魔法だけ。省略すると `"all"`）：`"all"` は相手の全レーンの兵士に効く。`"lane"` は選んだ1レーンの相手の兵士だけに効く（対象は `{ playerId, roadId }`）。`laneCount` が1のときは `"lane"` でも `"all"` と同じ（対象を選ばない）
 - `monsterFirstRound`：魔物が出はじめる周回（省略すると3）。`monsterCooldownRounds`：魔物を倒した道に次の魔物が出ない周回の数（省略すると0）。`monsterSpawnChance`：周回の始めに、魔物がいない道ごとに魔物が出る確率（0〜1の数。省略すると0）
-- `elementBonus`：属性が強いときに増えるダメージ（省略すると0）
-- カードの `kind`：`soldier` / `spell` / `weapon`（`attackBonus`、`element`）/ `defense`（`effect`: `shieldSoldier` / `armorCastle`、`amount`）。魔法の `effect` に `poisonEnemySoldiers`（`amount`, `turns`）と `freezeEnemySoldiers`（`turns`）が増えた。`element` は `fire` / `water` / `wind` / `earth`
+- `elementBonus`：**使わなくなった**（属性の相性は `data/elements.json` の倍率。「属性を10種にした」）
+- カードの `kind`：`soldier` / `spell` / `weapon`（`attackBonus`、`element`）/ `defense`（`effect`: `shieldSoldier` / `armorCastle`、`amount`）。魔法の `effect` に `poisonEnemySoldiers`（`amount`, `turns`）と `freezeEnemySoldiers`（`turns`）が増えた。`element` は `fire` / `water` / `wind` / `earth`。魔法にも `element` を書ける（属性の反応の付着・反応だけに使う。「属性の反応」の節）
 - `secondPlayerCastleBonus`：後攻（p2）の城だけ、HPと上限がこのぶん多い（先攻有利をやわらげるため）。0以上の整数
 - `advanceAfterWin`：`true` なら、戦いで相手だけが消えたとき、残りの歩数で進み続ける（`false` ならそのターンはその場で止まる）。省略すると `false`
 - `soldierCastleDamageMultiplier`：城に着いた兵士が与えるダメージ ＝ 攻撃力 × この値（1以上の整数）。省略すると 1
@@ -531,9 +551,9 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 - 付加・防御も、出しても何も起きないときは出せない（例：道の上に自分の兵士がいないときの武器、同じ武器をもう持っている兵士、全員がもう同じ状態のときの毒の霧・氷の息、今と同じか強い城壁があるときの城壁）
 
 ### 属性
-- 属性は 火（`fire`）・水（`water`）・風（`wind`）・土（`earth`）の4つ（人間に確認して、木をなくして風・土にした）。**水は火に強い、火は風に強い、風は土に強い、土は水に強い**（4つの輪。火と土・水と風は、どちらも強くも弱くもない。**強弱の組み合わせは仮**）
+- 属性は 火（`fire`）・水（`water`）・風（`wind`）・土（`earth`）の4つ（人間に確認して、木をなくして風・土にした）。**相性は「属性を10種にした」の節の図（水→火・土、風→火、土→風 など。有利1.5倍・不利0.75倍）が最新**（昔の「水→火→風→土→水の輪」は使わない）。**強弱の組み合わせは仮**
 - 兵士は、属性つきの武器を持つとその属性になる（持っていなければ属性なし）
-- 兵士同士の戦いで、自分の属性が相手の属性に強いとき、与えるダメージが `rules.elementBonus`（仮：2）増える。属性なしの相手には増えない
+- 兵士同士の戦いで、自分の属性が相手の属性に強いとき、与えるダメージが倍率で増える（今は `data/elements.json` の1.5倍（不利は0.75倍）。「属性を10種にした」）。属性なしの相手には増えない
 - 理由：武器で強くすると、相手が「強い属性」の武器で返せる。強くするほど狙われるので、出す順番と読み合いが生まれる（大きな見返りには、大きなリスク）
 
 ### 状態異常
@@ -955,11 +975,20 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 ### 戦いの属性を4つにした（木 → 風・土）
 人間の指示で、兵士同士の戦いの属性を 火・水・風・土 の4つにした（木はなくした）。**強弱の組み合わせは仮。**
 
-- 強弱：水→火→風→土→水の輪（矢印の先の属性に強い）。向かい合う属性（火と土・水と風）は、強くも弱くもない
+- 強弱：（昔は水→火→風→土→水の輪だったが、のちに「属性を10種にした」の図に変えた。そちらが最新）
 - 武器：木の斧をやめて、風の弓（`windBow`）と土の槌（`earthHammer`）にした（各1枚。武器は炎の剣・水の槍・風の弓・土の槌 各1と鉄の剣1）。魔物は、ゴブリンを風、ゴーレムを土にした
 - デッキ（`data/decks.json`）：木の斧を風の弓に置きかえた（土の槌は入れていない）
 - 確かめたこと：`node --test` は全部通る。`node tests/sim/run.js --games 400` は全組み合わせが決着し、CPU の強さの順は変わらない。デッキ対戦の勝率は、いったん突撃61%・籠城58%（A1 の5枚補充から）とずれていたが、下の「デッキ対戦の再調整」で直した
 - 画面：属性のアイコン・武器の絵・説明文を風・土に直した（`js/ui/look.js`・`art.js`・`text.js`）。絵は仮
+
+### 属性を10種にした（火水風土氷雷闇光無混沌）。固定+2は乗算に変えた。相性は人間の図に合わせて直した（人間の指示：図に合わせて 有利1.5・不利0.75、混沌は基本相性なし。仮）
+- 属性：火・水・風・土・氷（`ice`）・雷（`thunder`）・闇（`dark`）・光（`light`）・無（属性なし。`element` を書かない／`null`）・混沌（`chaos`）。今の火水風土はそのまま。精霊（`SPIRIT_KINDS`）は火水風土のまま別扱い
+- 相性（`data/elements.json`。「A→B」＝AはBに有利）：水→火、火→氷、氷→水、風→火、水→土、土→雷、土→風、雷→水、光⇄闇（互いに有利）。**混沌・無は基本相性なし**（混沌は後で「反応」の仕組みに使う予定。属性としては残す）。書いていない組み合わせは1.0。不利は逆向きの矢印（相手が自分に有利を取れる組み合わせ。例：火は水と風に不利、氷は火に不利）。光闇は互いに有利だけで不利は出ない
+- 書き方：`multipliers`（`advantage` 1.5・`disadvantage` 0.75）と、`elements` の各属性に `name`・`beats`（有利を取れる相手）。**不利は `beats` の逆向きから決まる**（JSONの二重管理をしない）。`weakAgainst`（その相手を攻撃すると不利になる）は、`beats` から出ない不利を足したいときの任意キー（今のデータでは使わない）。JSON を直すだけで相性を変えられる。検証は `validateElements()`（`js/game/Elements.js`）。`new Game({ elements })` は省略でき、省略すると組み込みの `DEFAULT_ELEMENTS`（`data/elements.json` と同じ中身）
+- ダメージの順番（`Game.fightDamage`の1か所だけ）：基本の攻撃力（背水・夜を含む）→ ×属性倍率（**切り上げ**。結果は最低1）→ ＋天候の属性ボーナス → ステージ倍率。城に着く兵士・魔法には属性補正を入れない（今まで通り）
+- **`rules.elementBonus`（有利なら+2）は使わなくなった**（`data/rules.json` から消した。書いても効かない）
+- 画面：新属性の色・アイコン・説明は仮（`js/ui/look.js`・`art.js` の仮の SVG・`HelpView.js`）。氷・雷・闇・光・混沌の武器と魔法は作った（「闇・光・混沌のカードを足した」の節）。氷・雷・闇・光・混沌の魔物・ステージはまだ作っていない（データは足していない）
+- 確かめたこと：`node --test` 全部通る（`tests/elements.test.js`）。`node tests/sim/run.js --games 200 --match smart,smart`：平均42.3手番・p1 勝率47%（固定+2のときは42.6・46%）
 
 ### デッキ対戦の再調整（`data/decks.json`）
 `node tests/sim/castles.js --games 800`（smart 同士、席を入れかえ）で、バランスに勝つ割合が 突撃59%・籠城66% だったので、データだけ直した（仮）。
@@ -1082,7 +1111,8 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 
 **数値はすべて仮**。`data/` のJSONで調べて直す。
 
-- **MP（魔法のコスト）**：`rules.initialMp`（仮：10）・`rules.maxMp`（仮：20。0 なら MP を使わない＝コストなし）。**攻撃の魔法**（`damageEnemyCastle` / `damageEnemySoldiers` / `poisonEnemySoldiers` / `freezeEnemySoldiers`）と**精霊**（`summonSpirit`）を出すと、レアリティのぶん MP を使う（`rarities.json` の `mpCost`：コモン1・アンコモン2・レア3・エピック4・レジェンド5。カードの `mpCost` で個別に変えられる）。足りなければ出せない（`canPlayCard` の理由は「MPが足りません（○必要・あと○）」）。兵士・武器・防御・回復・コイン・神頼みでタダで出すカードは MP を使わない。自然回復はなく、マナ回復のカードだけで増える
+- **MP（魔法のコスト）**：`rules.initialMp`（仮：10）・`rules.maxMp`（仮：30。0 なら MP を使わない＝コストなし）。**攻撃の魔法**（`damageEnemyCastle` / `damageEnemySoldiers` / `poisonEnemySoldiers` / `freezeEnemySoldiers`）と**精霊**（`summonSpirit`）を出すと、レアリティのぶん MP を使う（`rarities.json` の `mpCost`：コモン1・アンコモン2・レア3・エピック4・レジェンド5。カードの `mpCost` で個別に変えられる）。足りなければ出せない（`canPlayCard` の理由は「MPが足りません（○必要・あと○）」）。兵士・武器・防御・回復・コイン・神頼みでタダで出すカードは MP を使わない。自然回復はなく、マナ回復のカードだけで増える
+- 人間の指示：MP/SP 上限は30。初期値10のまま
 - **マナ回復のカード**（`effect: "gainMp"`、`amount`。メインを使わず何枚でも）：魔力のかけら（コモン+1）→魔力のしずく（アンコモン+2）→魔力の水晶（レア+5）→魔力の泉（エピック+10）→世界樹のしずく（レジェンド+20）の5段階の系統（合成でつながる）。上限を超えたぶんは捨てる。MP が満タンなら出せない
 - `getState()`：`maxMp`、`mpCosts`（MP を使うカード種類 → 必要な MP）、`players.pX.mp`。イベント `mpChanged`
 - CPU：MP が上限の半分以下になったら、ターンの最初にマナ回復のカードを出す（`pass` 以外）
@@ -1094,7 +1124,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
   - 放置するとレアリティが上がる：`rules.monsterEvolveEvery`（仮：3。0 なら強くならない）周ごとに、魔物の HP・攻撃・城への攻撃が `rules.monsterEvolveMultiplier`（仮：1.2）倍（HP は増えたぶん回復）になり、ごほうびのレアリティが1つ上がる（レジェンドの上はない）。倒したときは、育ったあとのレアリティのごほうびが出る。イベント `monsterEvolved`。`getState().monsters[]` に `evolveCount`
   - 確かめたこと（`node tests/sim/run.js --games 300`）：全組み合わせが決着。smart 同士は平均55手番・p1 勝率53%、smart vs random は91%（育たないときは93%）。放置の怖さは出た（魔物で決着する試合：random 同士で約4割、smart 同士は約2%）。**強すぎないかは遊んで確かめる**
 - **降参（3人以上）**：城が壊れて抜け、残りの試合を見守る（上の `surrender` の表）。画面は観戦中の帯を出し、ターン終了・強化・合成を押せなくする
-- 画面：MP の表示（上のバー。自分は「✦10/20」）、手札に必要な MP の札、合成の演出（レアリティが高いほど光・火花・揺れが大きい）、魔物が育つ演出、城が落ちた帯（`js/ui/Animations.js`）。マナ回復カードの絵は仮（`js/ui/art.js` に足すまで「魔」の仮の絵が出る）
+- 画面：MP の表示（上のバー。自分は「✦10/30」）、手札に必要な MP の札、合成の演出（レアリティが高いほど光・火花・揺れが大きい）、魔物が育つ演出、城が落ちた帯（`js/ui/Animations.js`）。マナ回復カードの絵は仮（`js/ui/art.js` に足すまで「魔」の仮の絵が出る）
 
 ## 天候・魔物の駒・チャット・体力ゲージ（人間の指示。仮）
 
@@ -1333,7 +1363,7 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 ### ステージ（`new Game({ stages, setup: { stage } })`）
 - 試合の最初に1つ決まり、試合のあいだ変わらない。`setup.stage` がIDならそのステージ、省略か `"random"` なら `weight` の重みでランダム（山札を作ったあとに乱数を使う。`stages` を渡さなければ乱数を使わない）
 - **合う属性の武器を持った兵士は、ダメージが `elementMultiplier`（1.5）倍**（小数は切り上げ）。武器を持っていて、兵士の属性（最後に持たせた武器の属性）がステージの `element` と同じときだけ。兵士同士の戦い・魔物との戦い・射撃・城へのダメージに効く（城へは「攻撃力×1.5（切り上げ）」× `soldierCastleDamageMultiplier`）。魔法・魔物には効かない（人間の指示）
-- 溶岩＝火（炎の剣）・氷＝水（水の槍。「氷の剣」はないので水の槍に当てた）・闇の森＝風（風の弓）・砂漠＝土（土の槌）。遺跡・草原は属性なし
+- 溶岩＝火（フレイムソード。旧名：炎の剣）・氷＝水（アクアスピア。旧名：水の槍。「氷の剣」はないので水の槍に当てた）・闇の森＝風（ゲイルボウ。旧名：風の弓）・砂漠＝土（アースハンマー。旧名：土の槌）。遺跡・草原は属性なし
 
 | ステージ（ID） | 属性 | ギミック |
 |---|---|---|
@@ -1363,6 +1393,140 @@ STEP 1 は、2人が同じ端末で交互に遊ぶ最小版。数値はすべて
 
 ### まだ作っていないもの
 - **ワールドレイド**（ボスごとに専用ステージ：ドラゴン＝溶岩・古代竜＝古代遺跡・魔王＝闇の魔城）：遊び方（だれとだれが、どこで、何人で、何を倒すか）がまだ決まっていないので、人間に確認してから作る
+
+## 属性の反応（人間の指示。数値はすべて仮）
+
+兵士に属性が**付着**しているところへ**別の属性**で攻撃すると、その組が表にあれば**反応**が起きる。反応は**特殊効果＋追加ダメージ（倍率）**。反応のあと付着が別の属性に変わる・消えるので、続けて別の反応につながる（連鎖）。データは `data/reactions.json`、チェックと照合は `js/game/Reactions.js`（`validateReactions(data, elements)`）。`new Game({ reactions })` で受け取る（省略すると反応も付着もなく、今までと同じ）。
+
+- **付着**：属性つきの攻撃（属性を持つ兵士の戦い・射撃、`element` のある魔法）が**兵士に**当たると、標的にその属性が付く（`rules.attachTurns`、仮：3（人間の指示：付着を3ターンに延ばした。最初は2）。上書き）。無属性の攻撃・外れた攻撃（天候の霧・命中低下）は付かない。城・魔物には付かない。魔物の攻撃も付けない
+  - 凍結中は**氷**、やけど中は**火**が付着しているものとして照合する（付着 `attachment` があればそちらが先）。それを反応で使ったときは、その凍結・やけどは治る（`statusCleared`）
+  - 減り方（決めた）：**持ち主のターンの終わりに1減り、0で消える**。相手のターンに付けた付着（3）は、持ち主の次のターン・相手の次のターンまで残る
+- **反応**：攻撃した人の**自分のターンに、`rules.reactionsPerTurn` 回まで**（仮：1。`players.pX.reactionsThisTurn`、自分のターンの始めに0へ）。相手のターンの反撃（守る側の兵士の攻撃）では反応せず、付着だけする。回数を使い切ったあとの攻撃は、反応せずに付着を上書きする。0 なら反応も付着もない
+- **ダメージの順番**：基本の攻撃（背水・夜を含む）→ ×属性相性（切り上げ）→ ＋天候 → ステージ倍率 → **×反応の倍率（切り上げ）** → 土の精霊で軽くする。魔法は「カードの値 → ×反応の倍率」。倍率のない反応は掛けない
+- **魔法の属性**：`cards.json` の魔法に `element` を書ける（今のカードには書いていない）。兵士に当たる魔法（`damageEnemySoldiers`・チェーン・ブラスト・火薬庫・イグニッション・バースト・ピュリファイ・フレア・魔王）だけが付着・反応の起点になる。ダメージのない魔法（毒・凍結・押し戻し）は付着させない（仮）
+- **今の武器は火・水・風・土だけ**なので、実際のカードで起きるのは 蒸発・泥・炎拡散・霧・砂嵐（と、やけど中の兵士に火以外）。氷・雷が絡む反応は、データと判定だけ作ってある（テストは固定のカードで確かめる）
+
+| 組 | id | 名前 | 倍率 | 特殊効果（仮） | 付着のその後 |
+|---|---|---|---|---|---|
+| 火+水 | `evaporate` | 蒸発 | ×1.5 | — | 消える |
+| 火+氷 | `melt` | 融解 | ×1.5 | — | 水に変わる |
+| 水+氷 | `freeze` | 凍結 | — | 凍結1 | 消える（凍結中なので、氷として照合される） |
+| 水+雷 | `shock` | 感電 | — | 継続ダメージ1×2（盾は効かない）＋隣のマスの兵士に半分（切り上げ） | 消える |
+| 水+土 | `mud` | 泥 | — | 鈍足（速さ−1・2回の進軍。最低1） | 消える |
+| 風+火 | `flameSpread` | 炎拡散 | — | 標的と隣のマスの兵士にやけど（1×2） | 消える |
+| 風+水 | `fog` | 霧 | — | 命中低下（30%・2ターン） | 水霧（`mist`）に変わる |
+| 風+土 | `sandstorm` | 砂嵐 | — | 継続ダメージ1×2＋命中低下（30%・2ターン） | 消える |
+| 風+氷 | `blizzard` | 吹雪 | — | 標的と隣のマスの兵士に鈍足（−1・2回） | 消える |
+| 風+雷 | `stormThunder` | 雷嵐 | — | 同じ道の兵士全員に半分（切り上げ） | 消える |
+| 水霧+氷 | `frozenMist` | 凍結霧 | — | 凍結1＋命中低下（30%・2ターン） | 消える |
+
+- 組の順番は関係ない。同じ属性どうしは反応せず、付着の残りが戻る
+- **水霧**（`mist`）は、`mist` の組（凍結霧）を先に探し、なければ**水として**照合する（水霧に火 → 蒸発、雷 → 感電）
+- **混沌**：攻撃か付着が混沌なら、`chaosPool` からランダムに1つ（`rng`。混沌どうしは起きない）。`reactionTriggered` に `chaos: true`
+- **範囲**（決めた）：「隣のマス」（`scope: "adjacent"`）は、標的と**同じ道**の、前後1マス（**同じマスも**）にいる**標的と同じ陣地**の兵士。「同じ道」（`"lane"`）は、同じ道の同じ陣地の兵士全員。となりのレーンには及ばない。忍者は巻き込まない。巻き添えのダメージは属性なし（`cause: "reaction"`。付着・反応は起きない）
+- **新しい状態**：鈍足（`slow`。持ち主の進軍のたびに1減る）・命中低下（`blind`。その兵士の戦い・射撃が、天候の霧と同じしくみ（`rollMiss`）でその確率で外れる。持ち主のターンの終わりに1減る）・継続ダメージ（`dot`。持ち主の進軍の前、やけどのあとに受ける。盾は効かない）。重ねがけは量・回数を大きい方にそろえる
+- **データの書き方**（`reactions.json`）：`reactions.<id>` に `name`・`elements`（2つ）・`multiplier`（省略・`null` で倍率なし）・`effects`・`attachment`（反応のあとの付着。省略・`null` で消える）。`effects` は `{ kind, ... }` の配列で、`kind` は `status`（`status: "frozen" | "burn"`・`turns`・やけどは `amount`）／`dot`（`amount`・`turns`）／`slow`（`amount`・`turns`）／`blind`（`chance`・`turns`）／`splash`（`ratio`・`scope: "adjacent" | "lane"`。標的は含まない）。`splash` 以外は `scope`（`"target"`（省略）／`"adjacent"`／`"lane"`。標的も含む）で範囲を広げられる
+- 忍者：`attachmentChanged` / `reactionTriggered` も忍者の陣地（`stealth`）を付けて隠す（ふつうは忍者に攻撃は当たらない）
+- CPU（`strategies.js`）は反応を狙わない（今回は変えていない）
+- シミュレーション：`node tests/sim/run.js` は反応ありで回す（`--no-reactions` で反応なし）。表の「反応/試合」は1試合あたりの反応の回数と、1回でも起きた試合の割合
+- 確かめたこと（`node tests/sim/run.js --games 200`）：smart 同士は平均42.6手番・p1 勝率49%（反応なし 42.8・49%）、smart vs random は40.7手番・66%（反応なしと同じ）。全試合決着。**反応は1試合あたり0.03〜0.04回（起きた試合は3〜5%）でとても少ない**（のちに、下の「属性の武器・魔法を足した」で増やした）（兵士同士がぶつかるのが1試合3回ほどで、属性の魔法もないため）。反応を遊びの中心にするなら、属性の魔法を足す・CPU に狙わせる・`attachTurns` を延ばす、などを人間と決める
+- 画面（UI担当にお願いしたいこと）：付着のアイコン、反応の名前と倍率の演出、鈍足・命中低下・継続ダメージの表示（今は `statusApplied` の汎用の表示が出るだけ）
+
+## 属性の武器・魔法を足した（人間の指示：反応を実際に起きやすくする）
+
+属性の反応が1試合0.03〜0.04回しか起きなかったので、氷・雷の武器と、属性つきの魔法を足し、付着を3ターンに延ばした（`rules.attachTurns` 2 → 3）。既存カードの数値・効果は変えていない。CPU（`strategies.js`）も変えていない（新カードは既存の `damageEnemySoldiers` / 武器なので、既存の扱いで使われる）。**数値はすべて仮。**
+
+| 名前（type） | 種類 | 効果 | 長所 | 短所 | 枚数・合成先 |
+|---|---|---|---|---|---|
+| 氷の刃（`iceBlade`） | 武器・氷 | 攻撃+1、氷 | 氷の武器（反応の起点が増える） | ほかの武器と同じで、鉄の剣より弱い | コモン1・→鉄の剣 |
+| 雷の斧（`thunderAxe`） | 武器・雷 | 攻撃+1、雷 | 水の付着に感電を起こせる | 同上 | コモン1・→鉄の剣 |
+| 火炎弾（`flameBolt`） | 魔法・火 | 選んだ1レーンの相手の兵士全員に2 | 火が付着して反応のきっかけになる | サンダー（3）より弱い | コモン1・→サンダー |
+| 水流（`waterJet`） | 魔法・水 | 同上（水） | 同上（蒸発・感電・凍結などの起点） | 同上 | 同上 |
+| 突風（`gust`） | 魔法・風 | 同上（風） | 同上 | 同上 | 同上 |
+| 地鳴り（`tremor`） | 魔法・土 | 同上（土） | 同上 | 同上 | 同上 |
+| 氷の礫（`iceShard`） | 魔法・氷 | 同上（氷） | 同上 | 同上 | 同上 |
+| 雷撃（`sparkBolt`） | 魔法・雷 | 同上（雷） | 同上 | 同上 | 同上 |
+
+- 魔法は `effect: "damageEnemySoldiers"`・`scope: "lane"`・`amount: 2`・`element`。MP はコモンのコスト（1）。忍者には当たらない・防御を聞くなど、既存の決まりのまま。デッキ対戦（`decks.json`）・コスト制の見本には入れていない（勝率を動かさないため）
+- 全員共通の山札は排出率で引くので、コモンが8枚増えたぶん、コモンの中のほかのカードの出る割合は下がる（仕様どおり）。「攻撃と防御の比率」の枚数の記述は、昔の経緯としてそのまま残す
+- 周辺：魔法スキン `fxskin_*` を6枚（`data/shop.json`。武器にスキンはない）、ストーリー8枚（`js/ui/stories.js`）、武器の絵文字（`js/ui/look.js`）。専用の絵がないので、カードの絵は名前の仮の絵（`art.js` の `CARD_TYPES` に足すまで）
+- テスト：`tests/attribute-cards.test.js`（付着が3ターン残る・水流→火炎弾で蒸発・水流→雷撃で感電・氷の礫→水流で凍結・氷の刃／雷の斧でも付着と反応・1ターン1回の制限）
+- 確かめたこと（`node tests/sim/run.js --games 200`）：全組み合わせが決着。**反応は1試合あたり 0.25〜0.29回（起きた試合は22〜23%）**（以前は 0.03〜0.04回・3〜5%）。smart 同士は平均49.8手番・p1 勝率44%（反応なし 50.1手番・45%）、smart vs random は42.6手番・67%。CPU の弱い順は変わらない（random に勝つ割合：defensive 11%・rush 15%・smart 67%）。**遊んで、反応が多すぎ・少なすぎないか確かめる**（rush は属性の魔法を使わないので反応が少ない：0.10回）
+
+## 闇・光・混沌のカードを足した（人間の指示：他の属性のカードも作って）
+
+氷・雷のときと同じ形で、闇・光・混沌の武器3枚と魔法3枚を足した（すべてコモン。既存カードの数値・効果・CPU は変えていない。デッキ対戦・コスト制の見本には入れていない）。**数値はすべて仮。**
+
+| 名前（type） | 種類 | 効果 | 長所 | 短所 | 枚数・合成先 |
+|---|---|---|---|---|---|
+| 闇の鎌（`darkScythe`） | 武器・闇 | 攻撃+1、闇 | 光の兵士に有利（1.5倍） | 光の兵士に有利を取られる（相性は互い）。鉄の剣より弱い | コモン1・→鉄の剣 |
+| 光の槍（`lightLance`） | 武器・光 | 攻撃+1、光 | 闇の兵士に有利（1.5倍） | 同上 | コモン1・→鉄の剣 |
+| 混沌の杖（`chaosStaff`） | 武器・混沌 | 攻撃+1、混沌 | 付着・反応の起点になると、混沌の決まりでランダムな反応（`chaosPool`） | 基本の相性はなく（等倍）、何が起きるか選べない | コモン1・→鉄の剣 |
+| 闇弾（`shadowBolt`） | 魔法・闇 | 選んだ1レーンの相手の兵士全員に2 | 闇が付着する | サンダー（3）より弱い | コモン1・→サンダー |
+| 聖光線（`holyRay`） | 魔法・光 | 同上（光） | 同上 | 同上 | 同上 |
+| 混沌の渦（`chaosVortex`） | 魔法・混沌 | 同上（混沌） | 付着や反応がランダムな反応になる | 同上。どの反応が出るか選べない | 同上 |
+
+- 魔法は `effect: "damageEnemySoldiers"`・`scope: "lane"`・`amount: 2`・`element`。MP はコモンのコスト（1）。魔法には魔法スキン `fxskin_shadowBolt` / `fxskin_holyRay` / `fxskin_chaosVortex`（`data/shop.json`）がある（武器にスキンはない）。ストーリー6枚（`js/ui/stories.js`）、武器の絵文字（`js/ui/look.js`）。専用の絵がないので、カードの絵は名前の仮の絵
+- 闇・光の付着には反応の表がないので、反応は起きず付着だけ残る（上書き）。混沌は、混沌の付着に別の属性、または混沌の攻撃が付着に当たると、`chaosPool` からランダムに反応が起きる（混沌どうし・属性なしの攻撃では起きない）
+- テスト：`tests/attribute-cards2.test.js`（データ検証・闇↔光の相性1.5倍と混沌の等倍・付着・闇光は反応なし・混沌の反応の再現性とばらつき・混沌どうし／無属性は反応なし）
+- 確かめたこと（`node tests/sim/run.js --games 200`）：全組み合わせが決着。smart 同士は平均49.3手番・p1 勝率37%±7%・**反応 0.28回/試合（起きた試合25%）**（反応なし：48.8手番・39%）。smart vs random は45.0手番・63%（反応なし 45.3・62%）。CPU の弱い順は変わらない（random に勝つ割合：defensive 10%・rush 17%・smart 63%）。前回（氷・雷まで）は smart 同士 49.8手番・0.29回/試合で、ほぼ同じ。コモンが6枚増えたぶん、コモンの中の出る割合は薄まるだけ。**反応が多すぎ・少なすぎないかは遊んで確かめる**
+- まだ作っていない：闇・光・混沌の魔物・ステージ
+
+## 四大陣営（PR-A：基礎スキーマと陣営制限。人間に確認して決めた）
+
+人間が添付した「CASTLE FIELD 四大陣営統合仕様書 v1.0」と全295カードの台帳を `docs/four-factions/` に入れた（受け取ったまま。PR-B 以降とテストの基準）。**実装の判断はこの節を正とする**。仕様書と食い違ったら、実装を止めて人間に確認する。PR-A では、新カード（台帳の「新規案」213枚）・改名・戦闘効果・奥義は作っていない。
+
+- **陣営の印**：`data/cards.json` のカードに任意の `faction`。`kingdom`（王国軍）・`forest`（森の同盟）・`demon`（魔族軍）・`dragon`（竜族帝国）は `data/factions.json` のキー、`common`（全陣営共通）は `js/game/Factions.js` の `COMMON_FACTION`（factions.json には入れない）
+  - 台帳の「既存」78枚と「改名」4枚（旧名：炎の剣 `flameSword`・水の槍 `waterSpear`・風の弓 `windBow`・土の槌 `earthHammer`。森。**ID は今のまま**。名前は PR-B1 で台帳の名前（フレイムソード・アクアスピア・ゲイルボウ・アースハンマー）にした）の計82枚に付けた。共通は7種（魔力のかけら〜世界樹のしずく・適応・天の恵み）
+  - **faction のないカード＝旧カード**（見習い魔法使い〜賢者・鉄の剣・魔剣・盗賊・財宝系・属性の魔法と武器・チェーン・ブラスト・サイコロ・解毒薬・天候の呪文・ムーンライズ・ドーンブレイク・暗殺者・魔物のカードなど）。陣営モードの候補にはならないが、今までのモード・デッキ編成・魔物のごほうびでは今までどおり使える
+- **`implemented`**（任意の true / false。省略は true）：`false` のカードは陣営モードの候補から外す（PR-B1 で、どのモードの引き当てからも外すようにした。「四大陣営（PR-B1）」の節）
+- **チェック**（`Card.validateDefinitions`）：`factions` を渡すと `faction` は陣営のIDか `common` だけ（渡さなければ文字列かどうかだけ）。**合成先が別の陣営なら例外**（「○○の合成先は別の陣営です」。カードと `fuseTo` 先の両方に `faction` があって違うとき。`common` → 陣営のカードも不可。片方が旧カードなら確かめない）
+- **陣営をまたいでいた合成先は `fuseTo: null`（合成しない）にした**（人間の指示。新しいカードを作って付けかえない）：シールド・ブラスト（王国）→終末の炎（竜族）、ゲイルフォース（森）→氷河（魔族）、天の恵み（共通）→盗賊（旧カード）。**聖騎士（王国）→竜騎士（竜族）も陣営またぎ**なので `null` にした（仕様 5.3 が「撤去／再設計」としている。台帳では聖騎士→グランドパラディン。PR-B1 でグランドパラディン（王国）へつないだ）。この4つは陣営なしの今までのモードでも合成できなくなった（smart 同士600試合：平均48.2→46.6手番・先攻46→47%）
+  - （解消済み・PR-B1）森の4つの武器→鉄の剣（旧カード）は、人間の決定で台帳の次の段（ブレイズソード・タイドスピア・ストームボウ・グラナイトハンマー）に付けかえた。鉄の剣は旧カードのまま残る
+- **陣営モードの入り口**：`new Game({ ..., factions, setup: { faction: "kingdom" } })`。`deckMode` が `"shared"` のときだけ（`own` / `cost` で指定すると例外「陣営モードは共有山札（deckMode "shared"）だけです」）。全員が同じ陣営の共有山札。`factions` を渡していない・知らない陣営も例外。**省略・`null` なら今までと完全に同じ**（同じシードで山札の並びも同じ）。`getState().faction`
+  - デッキ編成（`cost`）・`own`・マイデッキは**陣営の制限なし**（今のまま）。異陣営戦（1人1つの陣営で、個別のランダム山札）は PR-E で別のモードとして作る
+- **候補（pool）**：`Factions.js` の `isLegalForFaction(def, factionId)`＝その陣営のカード＋`common`。ただし `weight` が0・`monster` のあるカード・`implemented: false` は入れない。faction のないスペシャル（サイコロ・解毒薬・天候の呪文・刻の魔法・暗殺者）は入らない（仕様の「特殊サイコロは別枠」）。共通の適応は入る
+  - Game は `poolOf(playerId)`（今は全員同じ候補。PR-E で席ごとにする）を、カードの種類を選ぶ経路に渡す：**共有山札を作る**（排出率で `deckSize` 枚。`rarities` なしの `count` 枚ずつでも候補の外は入れない）・**運命の祈り**・**幸運の加護**（ドローの引き当て）・**入手券**（`gainCard`。`canBuyUpgrade` も候補の中にそのレアリティがなければ「その強化はありません」）・**排出率の表示**（`getDropRates(viewerId)`。候補の中だけで100%）
+  - `js/game/Setup.js` の `dropRates` / `sampleType` / `sampleTypeOfRarity` / `nextRarityWithCards` / `rewardOdds` / `sampleDeckTypes` に任意の `allowed`（種類の Set か `(type, def) => boolean`。省略で今までと同じ）。`cards.json` 全体は絞らない（カードを作る・デッキ編成は全種類が前提）。候補が空なら `sampleType` などは `null`（山札を作るときは例外）
+  - **排出率は候補の中で按分される**：候補にないレアリティの割合は、ほかのレアリティに配られる。たとえばスペシャルは候補が適応だけなので、適応の排出率は約2.5% → 約5.9%になる（調整は PR-E）
+  - **魔物のごほうびは例外**（仕様 5.1-4）：陣営モードでも候補で絞らない（旧カード・ほかの陣営のカードも出うる。ラッキーで1つ上がるレアリティも全カードで決める）。魔物が育つときのレアリティの繰り上げも、魔物のレアリティの話なので絞らない。`getDropRates` の `monsters` も同じ
+  - 合成（`canFuse` / `fuse`）は `fuseTo` をたどるだけなので、上の合成先の検査で同じ陣営になる（適応＋カードX も、X の合成先）
+- **部屋**（`server/rooms.js`）：`settings.faction`（`null`＝陣営なし／陣営ID）。部屋主が `setRules` の `faction` で選ぶ（始まる前だけ・ランク戦は不可）。山札が `shared` でないのに選ぶと「陣営モードは共有山札（みんな共通）だけです」、山札を `shared` 以外に変えると陣営は `null` に戻る。`choices.factions`（`[{ id, name }]`。「なし」は画面が先頭に足す）。試合を始めるときに `setup.faction` を Game に渡す（試合中は変わらない）。**画面の陣営の選び方は PR-E で作る**（今は部屋の画面に出ない）
+- データの読み込み：`server/server.js` の `loadData`・`js/main.js`・`tests/helpers.js` の `loadOptionalData` が `data/factions.json` を読んで Game に渡す
+- シミュレーション：`node tests/sim/run.js --faction kingdom`。PR-A の時点（今の82枚だけ）の smart 同士200試合：王国（候補42種類）平均94.8手番・決着200/200（40%が周回の上限。城への攻撃魔法がないため）／森（24種類）51.8手番・200/200（兵士がいないので72%が魔物で決着）／魔族（19種類）16.6手番・200/200（兵士なし・毒で速い）／竜族（18種類）14.4手番・200/200（兵士は竜騎士だけ）。**どの陣営もカードが足りないので、遊べる形になるのは PR-B 以降**
+- テスト：`tests/four-factions-a.test.js`（台帳の数・faction の対応・検査・候補・全経路・合成・部屋）
+- これからの PR（仕様書7章）：**B** 台帳の295種類をデータに入れる（改名・合成先の付けかえ・`implemented: false`）→ **C** 戦闘のしくみ（森の精霊反応・魔族の呪い／蘇生・竜族の飛行／轟雷爆炎・王国の浄化／カウンター）→ **D** 陣営奥義のゲージ・画面・演出 → **E** 対戦モード（異陣営戦の個別山札）・排出率の調整・バランス
+
+## 四大陣営（PR-B1：台帳の取り込み 王国軍・全陣営共通・森の武器。人間に確認して決めた）
+
+台帳の295種類を陣営ごとに分けて `data/cards.json` に入れる（B1＝王国軍59・全陣営共通7・森の同盟の武器20の計86行。B2＝森の残り、B3＝魔族、B4＝竜族）。**数値はすべて仮**（仕様書の仮値か、既存カードを雛形にした値）。
+
+- **取り込みの道具**（`docs/four-factions/import/`。読み方は同じ場所の `README.md`）：`mapping.mjs`（**対応表**。台帳の1行ごとに kind・effect・数値・role・`implemented` とその理由・図鑑のストーリー）→ `node docs/four-factions/import/build.mjs`（冪等。`--check` で一致の確認だけ）が `data/cards.json`（新規行の追加・更新と、対応表で決めた既存カードの改名・合成先だけ）・`data/shop.json`（新しい兵士・魔法のスキン）・`js/ui/stories-factions.js`（図鑑のストーリー。`stories.js` が混ぜる）・`table.md`（対応表の一覧）を書き出す。数値を直すときは `mapping.mjs` を直して作り直し、`node js/ui/build-precache.js` も実行する
+- **新しいカードのID**：`<chain_id>_<rarity>`（例：`king_cavalry_legendary`）。既存のIDとぶつかったら `build.mjs` が止まる。台帳で `chain_id` が空の8行はどれも既存カード（新しいIDはいらない）
+- **機械的に付けるもの**：`faction`・`rarity`・`element`（台帳の属性。**武器と魔法だけ**。兵士に属性を持たせるスキーマはまだない）・`fuseTo`（台帳の `next_name`）・`count: 0`・`weight`（兵士はコモン1・アンコモン0.75・レア以上0.5、ほかは1）
+- **カードの新しいキー**（`Card.validateDefinitions`）
+  - `implemented: false`：効果がまだないカード。**`effect` を省略できる**（`effectPlan`＝将来の効果の説明。文字列）。どのモードでも引き当てない（陣営なしの山札・運命の祈り・幸運の加護・入手券・魔物のごほうび・陣営モードの候補）・デッキ編成に入れられない（`isDeckable`）・手札に来ても出せない／防御に使えない／合成の元にも先にもならない（「このカードの効果はまだありません」）。`true` のカードは今までどおりの厳しい検査
+  - `implementationNote`（文字列）：実装のメモ（false の理由など）。Game は使わない
+  - `factionOnly: true`：**陣営モードの候補でだけ引き当てる**（陣営なしの山札・ドローの引き当て・入手券・魔物のごほうびには出ない）。台帳から足した新しいカードに全部付けた。陣営なしのモードの山札を今までと同じにするため（人間に確認していない。報告事項）。デッキ編成（カスタム）には、効果のあるカードなら入れられる（仕様：カスタムは陣営の制限なし）
+  - 判定は `Setup.js` の `isDrawable(def, hasPool)`（`dropRates` / `sampleType` / `sampleTypeOfRarity` / `nextRarityWithCards` / `sampleDeckTypes`、Game の `count` 枚ずつの山札・入手券の可否が使う）
+- **王国軍**（新規24枚）：
+  - グランドパラディン（`king_cavalry_legendary`）：騎兵系の最上位（レジェンド）。HP10・攻撃10・速さ5（竜騎士と同格の仮値）。**聖騎士の合成先**にした（人間の決定。PR-A では null）。`implemented: true`
+  - 光の武器：ルミナスランス系5枚（`king_light_lance_*`）・聖鉄の剣・祝福の剣・光輝の剣（`king_light_sword_common/uncommon/rare`。光輝の剣→既存の聖剣→神剣）。攻撃+1/+2/+4/+6/+9・光。`true`。**既存の聖剣・神剣には光属性を付けた**（人間の決定。攻撃+6・+9は変えない。`mapping.mjs` の `reelement`）
+  - 光の攻撃魔法：ルミナ〜ディヴァインノヴァ（`king_light_spell_*`）。`damageEnemySoldiers`・光・2/3/5/7/12。コモン〜レアは選んだ1レーン（`scope: "lane"`）、エピック以上は全レーン（仕様の案）。MP はレアリティの標準。`true`
+  - 聖術師系5枚（`king_priest_*`。見習い聖術師〜セラフィム）：**`implemented: false`**。浄化・守護の効果も、兵士に光属性を持たせるスキーマもないので、ふつうの魔法使いとして出すと「既存効果の代用」になるため。データは魔法使い型（動かず撃つ。HP4〜10・攻撃2〜9・射程2・2ターン。仮）
+  - カウンター5枚（`king_counter_*`。パリィ〜ディヴァインリベンジ）：**`implemented: false`**（防御の場面で軽減・無効・反撃を起こすしくみがない）。`effectPlan` に仕様の仮値
+  - 既存の35枚（兵士・回復・盾・城防御・特殊防御）は変えていない。身代わり→反射、ピュリファイ・フレア→大回復は、台帳は合成先なしだが同じ王国なので今のまま
+- **全陣営共通**（7枚）：変更なし
+- **森の同盟の武器**（新規16枚）：フレイムソード系（火）・アクアスピア系（水）・ゲイルボウ系（風）・アースハンマー系（土）のアンコモン〜レジェンド（`forest_fire_sword_*` / `forest_water_lance_*` / `forest_wind_bow_*` / `forest_earth_hammer_*`）。攻撃+2/+4/+6/+9。`true`
+  - コモンの既存4枚は、**名前だけ**台帳の名前に変えた（炎の剣→フレイムソード、水の槍→アクアスピア、風の弓→ゲイルボウ、土の槌→アースハンマー。ID は今のまま）。合成先を鉄の剣から台帳の次の段（ブレイズソード・タイドスピア・ストームボウ・グラナイトハンマー）に付けかえた（人間の決定）。鉄の剣・魔剣は旧カードのまま
+- 件数：新規40枚（王国24・森16）。うち `implemented: true` 30枚（王国14・森16）、`false` 10枚（王国の聖術師5・カウンター5）。`cards.json` は 136 → 176種類
+- **陣営なしのモードへの影響**：新しいカードは引き当てに出ない（`factionOnly`）。ただし人間が決めた合成先の付けかえ（森の武器4枚・聖騎士）は陣営なしのモードでも効くので、合成で新しいカードが手に入る。smart 同士600試合：平均46.60→46.48手番・先攻46.8→46.5%・決着600/600・周回の上限2.3→2.2%・反応0.27回/試合（付けかえを戻すと PR-A と完全に同じ数字になることを確かめた）
+- 確かめたこと（`node tests/sim/run.js --games 200 --match smart,smart --faction …`。PR-A 時点との比較）：
+  - 王国：候補 42→56種類、平均 94.8→84.9手番、決着200/200、**周回の上限で決着 40%→27.5%**（光の攻撃魔法で兵士を減らせるようになった。城を攻める魔法はまだない）、先攻42→46%
+  - 森：候補 24→40種類、平均 51.8→54.5手番、決着200/200、魔物で決着 72%→80%、「出せる種類が2以上」81%→38%（**森にはまだ兵士がいないので、武器を出す相手がいない**。B2 で兵士が入るまで遊べる形ではない）
+- 画面：新しいカードの絵はまだない（名前の1文字目の仮の絵）。説明文は `text.js` が kind / effect から作る（`implemented: false` は `description` の「【準備中】…」）。`node ui-tests/stories.js`・`smoke.js`・`deck-editor.js`・`collection.js`・`all-cards-3d.js` は通る
+- テスト：`tests/four-factions-b1.test.js`（台帳との一致・既存136枚の固定ハッシュ・ID衝突・生成の冪等・implemented の除外（全経路）・王国／森の陣営モード・光の魔法のダメージと付着と範囲・光と森の武器の攻撃補正と属性・グランドパラディンの進軍・合成と系統）。`tests/four-factions-a.test.js` は、改名・付けかえに合わせて直した
+- **まだ作っていない**：森の残り（兵士・魔法・精霊・回復・防御。B2）・魔族（B3）・竜族（B4）。聖術師・カウンターの効果（PR-C）。陣営奥義（PR-D）。異陣営戦（PR-E）
 
 ## 全体の設計（STEP 2〜5 の見通し）
 

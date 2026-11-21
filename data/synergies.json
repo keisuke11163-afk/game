@@ -1,0 +1,188 @@
+{
+  "faction": {
+    "kingdom": {
+      "2": {
+        "description": "王国軍2枚：盾+1（仮）",
+        "bonus": {
+          "shield": 1
+        }
+      },
+      "3": {
+        "description": "王国軍3枚：HP+3（仮・固有）",
+        "bonus": {
+          "hp": 3
+        }
+      }
+    },
+    "demon": {
+      "2": {
+        "description": "魔族軍2枚：攻撃+1（仮）",
+        "bonus": {
+          "attack": 1
+        }
+      },
+      "3": {
+        "description": "魔族軍3枚：攻撃+3（仮・固有）",
+        "bonus": {
+          "attack": 3
+        }
+      }
+    },
+    "forest": {
+      "2": {
+        "description": "森の同盟2枚：回復量+1（仮）",
+        "bonus": {
+          "healBonus": 1
+        }
+      },
+      "3": {
+        "description": "森の同盟3枚：回復量+3（仮・固有）",
+        "bonus": {
+          "healBonus": 3
+        }
+      }
+    },
+    "dragon": {
+      "2": {
+        "description": "竜族帝国2枚：HP+1（仮）",
+        "bonus": {
+          "hp": 1
+        }
+      },
+      "3": {
+        "description": "竜族帝国3枚：攻撃+2（仮・固有）",
+        "bonus": {
+          "attack": 2
+        }
+      }
+    }
+  },
+  "race": {
+    "human": {
+      "2": {
+        "description": "人間2枚：HP+1（仮）",
+        "bonus": {
+          "hp": 1
+        }
+      },
+      "3": {
+        "description": "人間3枚：攻撃+1（仮・固有）",
+        "bonus": {
+          "attack": 1
+        }
+      }
+    },
+    "elf": {
+      "2": {
+        "description": "エルフ2枚：攻撃+1（仮）",
+        "bonus": {
+          "attack": 1
+        }
+      },
+      "3": {
+        "description": "エルフ3枚：攻撃+2（仮・固有）",
+        "bonus": {
+          "attack": 2
+        }
+      }
+    },
+    "dwarf": {
+      "2": {
+        "description": "ドワーフ2枚：盾+1（仮）",
+        "bonus": {
+          "shield": 1
+        }
+      },
+      "3": {
+        "description": "ドワーフ3枚：盾+2（仮・固有）",
+        "bonus": {
+          "shield": 2
+        }
+      }
+    },
+    "beastfolk": {
+      "2": {
+        "description": "獣人2枚：攻撃+1（仮）",
+        "bonus": {
+          "attack": 1
+        }
+      },
+      "3": {
+        "description": "獣人3枚：HP+2（仮・固有）",
+        "bonus": {
+          "hp": 2
+        }
+      }
+    },
+    "dragon": {
+      "2": {
+        "description": "ドラゴン2枚：HP+1（仮）",
+        "bonus": {
+          "hp": 1
+        }
+      },
+      "3": {
+        "description": "ドラゴン3枚：攻撃+2（仮・固有）",
+        "bonus": {
+          "attack": 2
+        }
+      }
+    },
+    "undead": {
+      "2": {
+        "description": "アンデッド2枚：攻撃+1（仮）",
+        "bonus": {
+          "attack": 1
+        }
+      },
+      "3": {
+        "description": "アンデッド3枚：HP+3（仮・固有）",
+        "bonus": {
+          "hp": 3
+        }
+      }
+    },
+    "demon": {
+      "2": {
+        "description": "デーモン2枚：攻撃+1（仮）",
+        "bonus": {
+          "attack": 1
+        }
+      },
+      "3": {
+        "description": "デーモン3枚：攻撃+3（仮・固有）",
+        "bonus": {
+          "attack": 3
+        }
+      }
+    },
+    "angel": {
+      "2": {
+        "description": "天使2枚：回復量+1（仮）",
+        "bonus": {
+          "healBonus": 1
+        }
+      },
+      "3": {
+        "description": "天使3枚：回復量+3（仮・固有）",
+        "bonus": {
+          "healBonus": 3
+        }
+      }
+    },
+    "golem": {
+      "2": {
+        "description": "ゴーレム2枚：HP+2（仮）",
+        "bonus": {
+          "hp": 2
+        }
+      },
+      "3": {
+        "description": "ゴーレム3枚：盾+2（仮・固有）",
+        "bonus": {
+          "shield": 2
+        }
+      }
+    }
+  }
+}

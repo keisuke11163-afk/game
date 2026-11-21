@@ -1,0 +1,6 @@
+{
+  "kingdom": { "name": "王国軍", "description": "防御・守護が得意。城と兵士を守り抜く。" },
+  "demon": { "name": "魔族軍", "description": "攻撃と状態異常が得意。じわじわ追い詰める。" },
+  "forest": { "name": "森の同盟", "description": "回復・支援が得意。仲間を支えて粘り勝つ。" },
+  "dragon": { "name": "竜族帝国", "description": "高火力・高耐久。力で押し切る。" }
+}

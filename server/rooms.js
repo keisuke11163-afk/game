@@ -102,6 +102,8 @@ export class Room {
       castleHp: data.rules.castleMaxHp,
       // ステージ（data/stages.json）："random"（毎試合ランダム）かステージのID
       stage: 'random',
+      // 四大陣営（PR-A）：全員が同じ陣営の共有山札。null なら陣営なし（今までどおり全カード）。共有山札（shared）のときだけ
+      faction: null,
     };
     this.game = null;
     /** 今の試合のチーム（席ごと。チームなしなら null） */
@@ -206,6 +208,8 @@ export class Room {
     if (teams) setup.teams = teams;
     this.lastTeams = teams;
     if (this.data.stages) setup.stage = this.settings.stage ?? 'random';
+    // 陣営モード：共有山札のときだけ（setRules で shared 以外にすると faction は null に戻るが、念のためここでも確かめる）
+    if (this.settings.faction && rules.deckMode === 'shared' && this.data.factions) setup.faction = this.settings.faction;
     // コイントス：先攻はランダム（チーム戦はチームの順のまま）
     if (!teams) {
       const coin = this.makeRng();
@@ -485,7 +489,7 @@ export class Room {
     return { ok: true };
   }
 
-  /** 部屋主がモードを選ぶ：{ winCondition?, deckMode?, teams?, castleHp?, stage? } */
+  /** 部屋主がモードを選ぶ：{ winCondition?, deckMode?, teams?, castleHp?, stage?, faction? } */
   setRules(seat, patch) {
     const bad = this.lobbyCheck(seat);
     if (bad) return bad;
@@ -505,6 +509,13 @@ export class Room {
         if (!this.data.stages) return { ok: false, reason: 'このサーバーではステージを使いません' };
         if (value !== 'random' && !Object.hasOwn(this.data.stages, value)) return { ok: false, reason: 'そのステージはありません' };
         next.stage = value;
+      } else if (key === 'faction') {
+        // 陣営（全員が同じ陣営の共有山札）。null で陣営なし
+        if (value !== null) {
+          if (!this.data.factions) return { ok: false, reason: 'このサーバーでは陣営を使いません' };
+          if (typeof value !== 'string' || !Object.hasOwn(this.data.factions, value)) return { ok: false, reason: 'その陣営はありません' };
+        }
+        next.faction = value;
       } else if (key === 'teams') {
         if (!Object.hasOwn(TEAM_MODES, value)) return { ok: false, reason: 'そのチームの分け方はありません' };
         next.teams = value;
@@ -516,6 +527,11 @@ export class Room {
       } else {
         return { ok: false, reason: `「${key}」は変えられません` };
       }
+    }
+    // 陣営モードは共有山札だけ。陣営を選ぶのに山札が共有でなければ断る。山札を共有以外に変えたときは、陣営を外す
+    if (next.faction && next.deckMode !== 'shared') {
+      if (Object.hasOwn(patch, 'faction')) return { ok: false, reason: '陣営モードは共有山札（みんな共通）だけです' };
+      next.faction = null;
     }
     this.settings = next;
     this.broadcastRoom();
@@ -865,6 +881,8 @@ export class Room {
         castleHpRange: { min: CASTLE_HP_MIN, max: CASTLE_HP_MAX },
         teamModes: Object.entries(TEAM_MODES).map(([id, name]) => ({ id, name })),
         // ステージ（stages.json がなければ空）。最初は「ランダム」
+        // 陣営（factions.json がなければ空）。「なし」は画面が先頭に足す
+        factions: Object.entries(this.data.factions ?? {}).map(([id, d]) => ({ id, name: d.name ?? id })),
         stages: this.data.stages ? [{ id: 'random', name: 'ランダム' }, ...Object.entries(this.data.stages).map(([id, d]) => ({ id, name: d.name ?? id, icon: d.icon ?? null }))] : [],
         teams: TEAM_IDS.map((id) => ({ id, name: TEAM_NAMES[id] })),
       },
@@ -937,7 +955,7 @@ export class Lobby {
    */
   createRankedRoom(users, ranked) {
     const room = new Room(`r${this.nextRoom++}`, this.data, this.makeRng, { ...this.options, ranked });
-    room.settings = { winCondition: 'firstDestroy', deckMode: 'cost', teams: 'off', castleHp: this.data.rules.castleMaxHp, stage: 'random' };
+    room.settings = { winCondition: 'firstDestroy', deckMode: 'cost', teams: 'off', castleHp: this.data.rules.castleMaxHp, stage: 'random', faction: null };
     const seats = {};
     for (const u of users) {
       const r = room.join(u.name, u.userId);

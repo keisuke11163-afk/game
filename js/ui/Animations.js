@@ -11,7 +11,7 @@ import { frameAsset } from './cardFrame.js';
 import { playerName } from './text.js';
 import { mountMiniCard } from './cardView.js';
 import { attackOf, attackFrames, impactSvg } from './motion.js';
-import { ELEMENT_BEATS } from '../game/Game.js';
+import { hasAdvantage } from '../game/Elements.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -444,8 +444,8 @@ export class Animations {
     const dist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     const ux = (b.x - a.x) / dist;
     const uy = (b.y - a.y) / dist;
-    // 属性が強い側の攻撃は「弱点」として大きく見せる（ルールの elementBonus と同じ組み合わせ）
-    const weak = (x, y) => Boolean(x.element && ELEMENT_BEATS[x.element] === y.element);
+    // 属性が強い側の攻撃は「弱点」として大きく見せる（相性が有利：倍率>1）
+    const weak = (x, y) => hasAdvantage(x.element, y.element);
     this.hitDir.set(bEl, { x: ux, y: uy, weight: ua.attack.weight, weak: weak(ua, ub) });
     this.hitDir.set(aEl, { x: -ux, y: -uy, weight: ub.attack.weight, weak: weak(ub, ua) });
     const at = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };

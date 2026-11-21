@@ -147,6 +147,9 @@ export function summarize(results, strategies) {
     roundLimitRate: results.filter((r) => r.reason === 'roundLimit').length / results.length,
     monstersDefeatedPerGame: sum((r) => r.monstersDefeated) / results.length,
     monsterCastleDamagePerGame: sum((r) => r.monsterCastleDamage) / results.length,
+    // 属性の反応（reactions を渡したとき）：1試合あたりの回数と、1回でも起きた試合の割合
+    reactionsPerGame: sum((r) => r.events.reactionTriggered ?? 0) / results.length,
+    reactionGameRate: results.filter((r) => (r.events.reactionTriggered ?? 0) > 0).length / results.length,
     endedByMonsterRate: decided.filter((r) => r.endedByMonster).length / (decided.length || 1),
     discardRate: sum((r) => r.discardTurns) / (sum((r) => r.mainTurns) || 1),
     choiceRate: sum((r) => r.choiceTurns) / (sum((r) => r.mainTurns) || 1),

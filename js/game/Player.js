@@ -17,6 +17,8 @@ export class Player {
     this.playedThisTurn = false;
     this.soldiersPlayedThisTurn = 0;
     this.coinCardsPlayedThisTurn = 0;
+    /** このターンに起こした属性の反応の回数（自分のターンの始めに0へ） */
+    this.reactionsThisTurn = 0;
     /** 負けて抜けたか（3人以上のとき） */
     this.eliminated = false;
     /** このターンに出したカードの枚数（メイン・付加・防御すべて） */
@@ -90,6 +92,7 @@ export class Player {
       handCount: this.hand.length,
       playedThisTurn: this.playedThisTurn,
       soldiersPlayedThisTurn: this.soldiersPlayedThisTurn,
+      reactionsThisTurn: this.reactionsThisTurn,
       soldiers: this.soldiers.map((s) => s.toState()),
     };
   }

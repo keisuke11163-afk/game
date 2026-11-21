@@ -6,6 +6,8 @@
 //   takeTurn(game, pid, rng, ctx)      … メインでカードを出す（出さなくてもよい）
 //   chooseDiscard(game, pid, rng, ctx) … ctx.discardCount 枚の cardId を返す
 
+import { hasAdvantage } from './Elements.js';
+
 const pick = (arr, rng) => arr[Math.floor(rng() * arr.length)];
 
 function view(game, pid) {
@@ -99,8 +101,6 @@ function playFirst(game, playable, typesInOrder) {
   return false;
 }
 
-const ELEMENT_BEATS = { water: 'fire', fire: 'wind', wind: 'earth', earth: 'water' };
-
 /**
  * メイン以外（付加・防御）のカードを、役に立つときに出す（ほどよく考える戦い方で使う）
  *   武器：まだ武器のない、いちばん前の兵士に。近くの相手の属性に強い属性を選ぶ
@@ -120,7 +120,7 @@ function playSupports(game, pid, ctx) {
       if (def.kind === 'weapon') {
         const nearElements = new Set(enemySoldiers.map((s) => s.element).filter(Boolean));
         // 近くの相手の属性に負ける属性は避ける
-        const bad = [...nearElements].some((e) => ELEMENT_BEATS[e] === def.element);
+        const bad = [...nearElements].some((e) => hasAdvantage(e, def.element));
         const target = front.find((s) => !s.weapon);
         if (!bad && target) played = playWith(game, c.cardId, (ts) => ts.find((t) => t.soldierId === target.soldierId));
       } else if (def.effect === 'shieldSoldier') {

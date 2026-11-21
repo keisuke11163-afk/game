@@ -14,7 +14,7 @@ test('手札の並び：種類順（兵士 → 武器 → 魔法 → 防御 → 
 });
 
 test('手札の並び：同じ種類の中は、レアリティが高い方から低い方へ', () => {
-  // 武器：神剣（レジェンド）→ 聖剣（エピック）→ 魔剣（レア）→ 鉄の剣（アンコモン）→ 炎の剣（コモン）
+  // 武器：神剣（レジェンド）→ 聖剣（エピック）→ 魔剣（レア）→ 鉄の剣（アンコモン）→ フレイムソード（コモン）
   const sorted = sortHand(hand('flameSword', 'godSword', 'ironSword', 'magicSword', 'holySword'), cards, rarities);
   assert.deepEqual(types(sorted), ['godSword', 'holySword', 'magicSword', 'ironSword', 'flameSword']);
 });

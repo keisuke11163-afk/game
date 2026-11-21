@@ -1,0 +1,62 @@
+{
+  "multipliers": {
+    "advantage": 1.5,
+    "disadvantage": 0.75
+  },
+  "elements": {
+    "fire": {
+      "name": "火",
+      "beats": [
+        "ice"
+      ]
+    },
+    "water": {
+      "name": "水",
+      "beats": [
+        "fire",
+        "earth"
+      ]
+    },
+    "wind": {
+      "name": "風",
+      "beats": [
+        "fire"
+      ]
+    },
+    "earth": {
+      "name": "土",
+      "beats": [
+        "thunder",
+        "wind"
+      ]
+    },
+    "ice": {
+      "name": "氷",
+      "beats": [
+        "water"
+      ]
+    },
+    "thunder": {
+      "name": "雷",
+      "beats": [
+        "water"
+      ]
+    },
+    "dark": {
+      "name": "闇",
+      "beats": [
+        "light"
+      ]
+    },
+    "light": {
+      "name": "光",
+      "beats": [
+        "dark"
+      ]
+    },
+    "chaos": {
+      "name": "混沌",
+      "beats": []
+    }
+  }
+}
