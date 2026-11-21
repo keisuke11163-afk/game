@@ -2147,6 +2147,531 @@
       "world": "kingdom",
       "desc": "ディヴァインノヴァを使うときの光が「白金」の色に。この魔法だけに効く。",
       "filter": "hue-rotate(20deg) brightness(1.4)"
+    },
+    "skin_forest_beast_common": {
+      "slot": "charSkin",
+      "target": "forest_beast_common",
+      "targetName": "森の獣兵",
+      "name": "森の獣兵・若葉",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "森の獣兵の見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_beast_uncommon": {
+      "slot": "charSkin",
+      "target": "forest_beast_uncommon",
+      "targetName": "ウルフファイター",
+      "name": "ウルフファイター・若葉",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ウルフファイターの見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_beast_rare": {
+      "slot": "charSkin",
+      "target": "forest_beast_rare",
+      "targetName": "ビーストウォリアー",
+      "name": "ビーストウォリアー・若葉",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ビーストウォリアーの見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_beast_epic": {
+      "slot": "charSkin",
+      "target": "forest_beast_epic",
+      "targetName": "フェンリルナイト",
+      "name": "フェンリルナイト・若葉",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "フェンリルナイトの見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_beast_legendary": {
+      "slot": "charSkin",
+      "target": "forest_beast_legendary",
+      "targetName": "フェンリルロード",
+      "name": "フェンリルロード・若葉",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "フェンリルロードの見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_elf_common": {
+      "slot": "charSkin",
+      "target": "forest_elf_common",
+      "targetName": "エルフの斥候",
+      "name": "エルフの斥候・若葉",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "エルフの斥候の見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_elf_uncommon": {
+      "slot": "charSkin",
+      "target": "forest_elf_uncommon",
+      "targetName": "エルフの射手",
+      "name": "エルフの射手・若葉",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "エルフの射手の見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_elf_rare": {
+      "slot": "charSkin",
+      "target": "forest_elf_rare",
+      "targetName": "エルフの狙撃手",
+      "name": "エルフの狙撃手・若葉",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "エルフの狙撃手の見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_elf_epic": {
+      "slot": "charSkin",
+      "target": "forest_elf_epic",
+      "targetName": "ハイエルフ",
+      "name": "ハイエルフ・若葉",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ハイエルフの見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_elf_legendary": {
+      "slot": "charSkin",
+      "target": "forest_elf_legendary",
+      "targetName": "森の守護者",
+      "name": "森の守護者・若葉",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "森の守護者の見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_druid_common": {
+      "slot": "charSkin",
+      "target": "forest_druid_common",
+      "targetName": "ドルイド見習い",
+      "name": "ドルイド見習い・若葉",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ドルイド見習いの見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_druid_uncommon": {
+      "slot": "charSkin",
+      "target": "forest_druid_uncommon",
+      "targetName": "ドルイド",
+      "name": "ドルイド・若葉",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ドルイドの見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_druid_rare": {
+      "slot": "charSkin",
+      "target": "forest_druid_rare",
+      "targetName": "エレメンタリスト",
+      "name": "エレメンタリスト・若葉",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "エレメンタリストの見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_druid_epic": {
+      "slot": "charSkin",
+      "target": "forest_druid_epic",
+      "targetName": "アークドルイド",
+      "name": "アークドルイド・若葉",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "アークドルイドの見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_forest_druid_legendary": {
+      "slot": "charSkin",
+      "target": "forest_druid_legendary",
+      "targetName": "世界樹の賢者",
+      "name": "世界樹の賢者・若葉",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "世界樹の賢者の見た目が「若葉」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(85deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "fxskin_forest_fire_magic_common": {
+      "slot": "spellSkin",
+      "target": "forest_fire_magic_common",
+      "targetName": "フレイム",
+      "name": "フレイム・若葉",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "フレイムを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_fire_magic_uncommon": {
+      "slot": "spellSkin",
+      "target": "forest_fire_magic_uncommon",
+      "targetName": "ブレイズ",
+      "name": "ブレイズ・若葉",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ブレイズを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_fire_magic_rare": {
+      "slot": "spellSkin",
+      "target": "forest_fire_magic_rare",
+      "targetName": "フレアバースト",
+      "name": "フレアバースト・若葉",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "フレアバーストを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_fire_magic_epic": {
+      "slot": "spellSkin",
+      "target": "forest_fire_magic_epic",
+      "targetName": "ヘルフレイム",
+      "name": "ヘルフレイム・若葉",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ヘルフレイムを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_fire_magic_legendary": {
+      "slot": "spellSkin",
+      "target": "forest_fire_magic_legendary",
+      "targetName": "プロミネンス",
+      "name": "プロミネンス・若葉",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "プロミネンスを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_water_magic_common": {
+      "slot": "spellSkin",
+      "target": "forest_water_magic_common",
+      "targetName": "アクア",
+      "name": "アクア・若葉",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "アクアを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_water_magic_uncommon": {
+      "slot": "spellSkin",
+      "target": "forest_water_magic_uncommon",
+      "targetName": "スプラッシュ",
+      "name": "スプラッシュ・若葉",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "スプラッシュを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_water_magic_rare": {
+      "slot": "spellSkin",
+      "target": "forest_water_magic_rare",
+      "targetName": "タイダルウェーブ",
+      "name": "タイダルウェーブ・若葉",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "タイダルウェーブを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_water_magic_epic": {
+      "slot": "spellSkin",
+      "target": "forest_water_magic_epic",
+      "targetName": "メイルストローム",
+      "name": "メイルストローム・若葉",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "メイルストロームを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_water_magic_legendary": {
+      "slot": "spellSkin",
+      "target": "forest_water_magic_legendary",
+      "targetName": "アビサルタイド",
+      "name": "アビサルタイド・若葉",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "アビサルタイドを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_wind_magic_common": {
+      "slot": "spellSkin",
+      "target": "forest_wind_magic_common",
+      "targetName": "エアカッター",
+      "name": "エアカッター・若葉",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "エアカッターを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_wind_magic_uncommon": {
+      "slot": "spellSkin",
+      "target": "forest_wind_magic_uncommon",
+      "targetName": "ウィンドエッジ",
+      "name": "ウィンドエッジ・若葉",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ウィンドエッジを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_wind_magic_rare": {
+      "slot": "spellSkin",
+      "target": "forest_wind_magic_rare",
+      "targetName": "サイクロン",
+      "name": "サイクロン・若葉",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "サイクロンを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_wind_magic_epic": {
+      "slot": "spellSkin",
+      "target": "forest_wind_magic_epic",
+      "targetName": "テンペスト",
+      "name": "テンペスト・若葉",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "テンペストを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_wind_magic_legendary": {
+      "slot": "spellSkin",
+      "target": "forest_wind_magic_legendary",
+      "targetName": "エターナルストーム",
+      "name": "エターナルストーム・若葉",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "エターナルストームを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_earth_magic_common": {
+      "slot": "spellSkin",
+      "target": "forest_earth_magic_common",
+      "targetName": "ロックブラスト",
+      "name": "ロックブラスト・若葉",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ロックブラストを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_earth_magic_uncommon": {
+      "slot": "spellSkin",
+      "target": "forest_earth_magic_uncommon",
+      "targetName": "ストーンスパイク",
+      "name": "ストーンスパイク・若葉",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ストーンスパイクを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_earth_magic_rare": {
+      "slot": "spellSkin",
+      "target": "forest_earth_magic_rare",
+      "targetName": "アースクエイク",
+      "name": "アースクエイク・若葉",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "アースクエイクを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_earth_magic_epic": {
+      "slot": "spellSkin",
+      "target": "forest_earth_magic_epic",
+      "targetName": "テラブレイク",
+      "name": "テラブレイク・若葉",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "テラブレイクを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_earth_magic_legendary": {
+      "slot": "spellSkin",
+      "target": "forest_earth_magic_legendary",
+      "targetName": "ガイアインパクト",
+      "name": "ガイアインパクト・若葉",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ガイアインパクトを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_life_heal_common": {
+      "slot": "spellSkin",
+      "target": "forest_life_heal_common",
+      "targetName": "若葉の癒やし",
+      "name": "若葉の癒やし・若葉",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "若葉の癒やしを使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_life_heal_uncommon": {
+      "slot": "spellSkin",
+      "target": "forest_life_heal_uncommon",
+      "targetName": "生命の雫",
+      "name": "生命の雫・若葉",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "生命の雫を使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_life_heal_rare": {
+      "slot": "spellSkin",
+      "target": "forest_life_heal_rare",
+      "targetName": "癒やしの泉",
+      "name": "癒やしの泉・若葉",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "癒やしの泉を使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_life_heal_epic": {
+      "slot": "spellSkin",
+      "target": "forest_life_heal_epic",
+      "targetName": "大樹の祝福",
+      "name": "大樹の祝福・若葉",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "大樹の祝福を使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "fxskin_forest_life_heal_legendary": {
+      "slot": "spellSkin",
+      "target": "forest_life_heal_legendary",
+      "targetName": "世界樹の息吹",
+      "name": "世界樹の息吹・若葉",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "世界樹の息吹を使うときの光が「若葉」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(85deg) saturate(1.4)"
     }
   }
 }

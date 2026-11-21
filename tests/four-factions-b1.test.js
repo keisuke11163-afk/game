@@ -10,7 +10,7 @@ import { Card } from '../js/game/Card.js';
 import { factionPool, isLegalForFaction } from '../js/game/Factions.js';
 import { sampleDeckTypes, sampleType, sampleTypeOfRarity, nextRarityWithCards, dropRates, isDeckable, checkCostDeck, isDrawable } from '../js/game/Setup.js';
 import { loadJson, seededRng, recordEvents, PLAIN_START } from './helpers.js';
-import { buildAll, formatCards, inScope, newCardId, FACTION_IDS, ELEMENT_IDS } from '../docs/four-factions/import/build.mjs';
+import { buildAll, formatCards, newCardId, FACTION_IDS, ELEMENT_IDS } from '../docs/four-factions/import/build.mjs';
 import { ROWS } from '../docs/four-factions/import/mapping.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -19,9 +19,11 @@ const CARDS = loadJson('cards.json');
 const rarities = loadJson('rarities.json');
 const factions = loadJson('factions.json');
 const reactions = loadJson('reactions.json');
-const B1 = LEDGER.cards.filter(inScope);
+// B1 の範囲（王国・共通・森の武器）。inScope は B2 以降で広がるので、ここでは固定する
+const B1 = LEDGER.cards.filter((r) => r.faction === '王国軍' || r.faction === '全陣営共通' || (r.faction === '森の同盟' && r.section === '武器'));
 const ofType = (log, t) => log.filter((e) => e.event === t);
-const NEW_IDS = Object.keys(CARDS).filter((id) => CARDS[id].factionOnly);
+const IS_B1_ID = (id) => CARDS[id].faction === 'kingdom' || /^forest_(fire_sword|water_lance|wind_bow|earth_hammer)_/.test(id);
+const NEW_IDS = Object.keys(CARDS).filter((id) => CARDS[id].factionOnly && IS_B1_ID(id));
 const ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
 /** 台帳の行 → カードID（既存は対応表の ID、新規は chain_id_rarity） */
