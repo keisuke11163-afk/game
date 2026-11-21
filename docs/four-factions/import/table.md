@@ -145,6 +145,82 @@
 | 森の同盟 | 兵士防御 | 棘の鎧 | 新規案 | `forest_plant_armor_rare` | defense | （効果なし） | 土・植物 | forest_plant_armor_epic | **false** | 仕様の「近接防御成功時の棘の反撃」を起こすしくみがまだない（反撃量も未決定）。盾だけで出すと棘のないただの盾（代用）になるため false。PR-C で作る |
 | 森の同盟 | 兵士防御 | 古樹の鎧 | 新規案 | `forest_plant_armor_epic` | defense | （効果なし） | 土・植物 | forest_plant_armor_legendary | **false** | 仕様の「近接防御成功時の棘の反撃」を起こすしくみがまだない（反撃量も未決定）。盾だけで出すと棘のないただの盾（代用）になるため false。PR-C で作る |
 | 森の同盟 | 兵士防御 | 森神の守護 | 新規案 | `forest_plant_armor_legendary` | defense | （効果なし） | 土・植物 | — | **false** | 仕様の「近接防御成功時の棘の反撃」を起こすしくみがまだない（反撃量も未決定）。盾だけで出すと棘のないただの盾（代用）になるため false。PR-C で作る |
+| 魔族軍 | 兵士 | 骸骨兵 | 新規案 | `demon_undead_common` | soldier | melee HP7/攻3/速1 | 闇 | demon_undead_uncommon | true | ふつうの進む兵士（melee）として実際に進軍・戦闘・城攻撃する。仕様「不死者は前衛」の部分。硬くて遅い壁（王国の同レアの兵士より HP が高く、攻撃が低く、遅い） |
+| 魔族軍 | 兵士 | 亡者騎士 | 新規案 | `demon_undead_uncommon` | soldier | melee HP8/攻5/速1 | 闇 | demon_undead_rare | true | ふつうの進む兵士（melee）として実際に進軍・戦闘・城攻撃する。仕様「不死者は前衛」の部分。硬くて遅い壁（王国の同レアの兵士より HP が高く、攻撃が低く、遅い） |
+| 魔族軍 | 兵士 | 黒騎士 | 新規案 | `demon_undead_rare` | soldier | melee HP14/攻5/速1 | 闇 | demon_undead_epic | true | ふつうの進む兵士（melee）として実際に進軍・戦闘・城攻撃する。仕様「不死者は前衛」の部分。硬くて遅い壁（王国の同レアの兵士より HP が高く、攻撃が低く、遅い） |
+| 魔族軍 | 兵士 | デスナイト | 新規案 | `demon_undead_epic` | soldier | melee HP16/攻7/速1 | 闇 | demon_undead_legendary | true | ふつうの進む兵士（melee）として実際に進軍・戦闘・城攻撃する。仕様「不死者は前衛」の部分。硬くて遅い壁（王国の同レアの兵士より HP が高く、攻撃が低く、遅い） |
+| 魔族軍 | 兵士 | 不死王 | 新規案 | `demon_undead_legendary` | soldier | melee HP20/攻10/速2 | 闇 | — | true | ふつうの進む兵士（melee）として実際に進軍・戦闘・城攻撃する。仕様「不死者は前衛」の部分。硬くて遅い壁（王国の同レアの兵士より HP が高く、攻撃が低く、遅い） |
+| 魔族軍 | 兵士 | 小悪魔 | 新規案 | `demon_warrior_common` | soldier | melee HP3/攻6/速4 | 闇 | demon_warrior_uncommon | **false** | 仕様「HP/MPを代償にした攻勢」の、代償を払って攻撃力を上げる仕組みがない。代償なしの高攻撃・低HP の兵士として出すと、代償で釣り合わせる前提の数値が意味を持たず、騎兵系（速くて脆い）の複製になるため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 兵士 | 魔族戦士 | 新規案 | `demon_warrior_uncommon` | soldier | melee HP3/攻8/速4 | 闇 | demon_warrior_rare | **false** | 仕様「HP/MPを代償にした攻勢」の、代償を払って攻撃力を上げる仕組みがない。代償なしの高攻撃・低HP の兵士として出すと、代償で釣り合わせる前提の数値が意味を持たず、騎兵系（速くて脆い）の複製になるため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 兵士 | 魔界騎士 | 新規案 | `demon_warrior_rare` | soldier | melee HP4/攻10/速4 | 闇 | demon_warrior_epic | **false** | 仕様「HP/MPを代償にした攻勢」の、代償を払って攻撃力を上げる仕組みがない。代償なしの高攻撃・低HP の兵士として出すと、代償で釣り合わせる前提の数値が意味を持たず、騎兵系（速くて脆い）の複製になるため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 兵士 | アビスロード | 新規案 | `demon_warrior_epic` | soldier | melee HP6/攻12/速4 | 闇 | demon_warrior_legendary | **false** | 仕様「HP/MPを代償にした攻勢」の、代償を払って攻撃力を上げる仕組みがない。代償なしの高攻撃・低HP の兵士として出すと、代償で釣り合わせる前提の数値が意味を持たず、騎兵系（速くて脆い）の複製になるため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 兵士 | 魔神の将軍 | 新規案 | `demon_warrior_legendary` | soldier | melee HP8/攻15/速4 | 闇 | — | **false** | 仕様「HP/MPを代償にした攻勢」の、代償を払って攻撃力を上げる仕組みがない。代償なしの高攻撃・低HP の兵士として出すと、代償で釣り合わせる前提の数値が意味を持たず、騎兵系（速くて脆い）の複製になるため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 兵士 | 見習い呪術師 | 新規案 | `demon_caster_common` | soldier | mage HP3/攻2/射2/2T | 闇・氷・混沌 | demon_caster_uncommon | **false** | 仕様「闇・氷・混沌による妨害・吸収」を起こすしくみがない。兵士に属性を持たせるスキーマもない（台帳の属性は「闇・氷・混沌」の3つ）。仕様は「共通魔法使いは使わない」としており、ふつうの魔法使いとして出すと旧カードの魔法使い系の複製（既存効果の代用）になるため false（仕様 PR-B） |
+| 魔族軍 | 兵士 | 呪術師 | 新規案 | `demon_caster_uncommon` | soldier | mage HP3/攻4/射2/2T | 闇・氷・混沌 | demon_caster_rare | **false** | 仕様「闇・氷・混沌による妨害・吸収」を起こすしくみがない。兵士に属性を持たせるスキーマもない（台帳の属性は「闇・氷・混沌」の3つ）。仕様は「共通魔法使いは使わない」としており、ふつうの魔法使いとして出すと旧カードの魔法使い系の複製（既存効果の代用）になるため false（仕様 PR-B） |
+| 魔族軍 | 兵士 | ウォーロック | 新規案 | `demon_caster_rare` | soldier | mage HP4/攻6/射2/2T | 闇・氷・混沌 | demon_caster_epic | **false** | 仕様「闇・氷・混沌による妨害・吸収」を起こすしくみがない。兵士に属性を持たせるスキーマもない（台帳の属性は「闇・氷・混沌」の3つ）。仕様は「共通魔法使いは使わない」としており、ふつうの魔法使いとして出すと旧カードの魔法使い系の複製（既存効果の代用）になるため false（仕様 PR-B） |
+| 魔族軍 | 兵士 | ネクロマンサー | 新規案 | `demon_caster_epic` | soldier | mage HP5/攻8/射2/2T | 闇・氷・混沌 | demon_caster_legendary | **false** | 仕様「闇・氷・混沌による妨害・吸収」を起こすしくみがない。兵士に属性を持たせるスキーマもない（台帳の属性は「闇・氷・混沌」の3つ）。仕様は「共通魔法使いは使わない」としており、ふつうの魔法使いとして出すと旧カードの魔法使い系の複製（既存効果の代用）になるため false（仕様 PR-B） |
+| 魔族軍 | 兵士 | 冥府の大賢者 | 新規案 | `demon_caster_legendary` | soldier | mage HP7/攻11/射2/2T | 闇・氷・混沌 | — | **false** | 仕様「闇・氷・混沌による妨害・吸収」を起こすしくみがない。兵士に属性を持たせるスキーマもない（台帳の属性は「闇・氷・混沌」の3つ）。仕様は「共通魔法使いは使わない」としており、ふつうの魔法使いとして出すと旧カードの魔法使い系の複製（既存効果の代用）になるため false（仕様 PR-B） |
+| 魔族軍 | 武器 | シャドウサイズ | 新規案 | `demon_dark_scythe_common` | weapon | 攻撃+1 | dark | demon_dark_scythe_uncommon | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+1は仕様書の値 |
+| 魔族軍 | 武器 | ダークサイズ | 新規案 | `demon_dark_scythe_uncommon` | weapon | 攻撃+2 | dark | demon_dark_scythe_rare | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+2は仕様書の値 |
+| 魔族軍 | 武器 | ブラッドサイズ | 新規案 | `demon_dark_scythe_rare` | weapon | 攻撃+4 | dark | demon_dark_scythe_epic | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+4は仕様書の値 |
+| 魔族軍 | 武器 | アビスサイズ | 新規案 | `demon_dark_scythe_epic` | weapon | 攻撃+6 | dark | demon_dark_scythe_legendary | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+6は仕様書の値 |
+| 魔族軍 | 武器 | エクリプスサイズ | 新規案 | `demon_dark_scythe_legendary` | weapon | 攻撃+9 | dark | — | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+9は仕様書の値 |
+| 魔族軍 | 武器 | フロストブレード | 新規案 | `demon_ice_blade_common` | weapon | 攻撃+1 | ice | demon_ice_blade_uncommon | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+1は仕様書の値 |
+| 魔族軍 | 武器 | アイスセイバー | 新規案 | `demon_ice_blade_uncommon` | weapon | 攻撃+2 | ice | demon_ice_blade_rare | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+2は仕様書の値 |
+| 魔族軍 | 武器 | グレイシャルブレード | 新規案 | `demon_ice_blade_rare` | weapon | 攻撃+4 | ice | demon_ice_blade_epic | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+4は仕様書の値 |
+| 魔族軍 | 武器 | 永劫凍刃 | 新規案 | `demon_ice_blade_epic` | weapon | 攻撃+6 | ice | demon_ice_blade_legendary | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+6は仕様書の値 |
+| 魔族軍 | 武器 | 絶氷剣 | 新規案 | `demon_ice_blade_legendary` | weapon | 攻撃+9 | ice | — | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+9は仕様書の値 |
+| 魔族軍 | 武器 | カオスロッド | 新規案 | `demon_chaos_staff_common` | weapon | 攻撃+1 | chaos | demon_chaos_staff_uncommon | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+1は仕様書の値 |
+| 魔族軍 | 武器 | ワープロッド | 新規案 | `demon_chaos_staff_uncommon` | weapon | 攻撃+2 | chaos | demon_chaos_staff_rare | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+2は仕様書の値 |
+| 魔族軍 | 武器 | ヴォイドスタッフ | 新規案 | `demon_chaos_staff_rare` | weapon | 攻撃+4 | chaos | demon_chaos_staff_epic | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+4は仕様書の値 |
+| 魔族軍 | 武器 | アビスロッド | 新規案 | `demon_chaos_staff_epic` | weapon | 攻撃+6 | chaos | demon_chaos_staff_legendary | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+6は仕様書の値 |
+| 魔族軍 | 武器 | 原初の混沌杖 | 新規案 | `demon_chaos_staff_legendary` | weapon | 攻撃+9 | chaos | — | true | 既存の武器のしくみ（攻撃補正の足し算・最後の武器の属性）で実際に効く。攻撃補正+9は仕様書の値 |
+| 魔族軍 | 攻撃魔法 | シャドウ | 新規案 | `demon_dark_spell_common` | spell | （効果なし） | dark | demon_dark_spell_uncommon | **false** | 仕様の追加効果（侵食）を起こすしくみがまだなく、ダメージと属性だけで出すと追加効果がなく同レアの火の魔法より弱いだけになるため false（既存効果の代用にしない。仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 攻撃魔法 | ダークボルト | 新規案 | `demon_dark_spell_uncommon` | spell | （効果なし） | dark | demon_dark_spell_rare | **false** | 仕様の追加効果（侵食）を起こすしくみがまだなく、ダメージと属性だけで出すと追加効果がなく同レアの火の魔法より弱いだけになるため false（既存効果の代用にしない。仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 攻撃魔法 | ナイトメア | 新規案 | `demon_dark_spell_rare` | spell | （効果なし） | dark | demon_dark_spell_epic | **false** | 仕様の追加効果（侵食）を起こすしくみがまだなく、ダメージと属性だけで出すと追加効果がなく同レアの火の魔法より弱いだけになるため false（既存効果の代用にしない。仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 攻撃魔法 | アビスバースト | 新規案 | `demon_dark_spell_epic` | spell | （効果なし） | dark | demon_dark_spell_legendary | **false** | 仕様の追加効果（侵食）を起こすしくみがまだなく、ダメージと属性だけで出すと追加効果がなく同レアの火の魔法より弱いだけになるため false（既存効果の代用にしない。仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 攻撃魔法 | エクリプス | 新規案 | `demon_dark_spell_legendary` | spell | （効果なし） | dark | — | **false** | 仕様の追加効果（侵食）を起こすしくみがまだなく、ダメージと属性だけで出すと追加効果がなく同レアの火の魔法より弱いだけになるため false（既存効果の代用にしない。仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 攻撃魔法 | 氷の息 | 既存 | `frostBreath` | spell | freezeEnemySoldiers scope lane | 氷 | deepFreeze | true | 既存カード（効果・数値・IDは今のまま） |
+| 魔族軍 | 攻撃魔法 | 大氷結 | 既存 | `deepFreeze` | spell | freezeEnemySoldiers | 氷 | glacier | true | 既存カード（効果・数値・IDは今のまま） |
+| 魔族軍 | 攻撃魔法 | 氷河 | 既存 | `glacier` | spell | freezeEnemySoldiers scope lane | 氷 | absoluteZero | true | 既存カード（効果・数値・IDは今のまま） |
+| 魔族軍 | 攻撃魔法 | 絶対零度 | 既存 | `absoluteZero` | spell | freezeEnemySoldiers | 氷 | frozenWorld | true | 既存カード（効果・数値・IDは今のまま） |
+| 魔族軍 | 攻撃魔法 | 氷結世界 | 既存 | `frozenWorld` | spell | freezeEnemySoldiers | 氷 | — | true | 既存カード（効果・数値・IDは今のまま） |
+| 魔族軍 | 攻撃魔法 | カオスパルス | 新規案 | `demon_chaos_spell_common` | spell | （効果なし） | chaos | demon_chaos_spell_uncommon | **false** | 仕様の追加効果（状態異常の転換と追加ダメージ）を起こすしくみがまだなく、ダメージと属性だけで出すと追加効果がなく同レアの火の魔法より弱いだけになるため false（既存効果の代用にしない。仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 攻撃魔法 | カオススフィア | 新規案 | `demon_chaos_spell_uncommon` | spell | （効果なし） | chaos | demon_chaos_spell_rare | **false** | 仕様の追加効果（状態異常の転換と追加ダメージ）を起こすしくみがまだなく、ダメージと属性だけで出すと追加効果がなく同レアの火の魔法より弱いだけになるため false（既存効果の代用にしない。仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 攻撃魔法 | ディストーション | 新規案 | `demon_chaos_spell_rare` | spell | （効果なし） | chaos | demon_chaos_spell_epic | **false** | 仕様の追加効果（状態異常の転換と追加ダメージ）を起こすしくみがまだなく、ダメージと属性だけで出すと追加効果がなく同レアの火の魔法より弱いだけになるため false（既存効果の代用にしない。仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 攻撃魔法 | カオスストーム | 新規案 | `demon_chaos_spell_epic` | spell | （効果なし） | chaos | demon_chaos_spell_legendary | **false** | 仕様の追加効果（状態異常の転換と追加ダメージ）を起こすしくみがまだなく、ダメージと属性だけで出すと追加効果がなく同レアの火の魔法より弱いだけになるため false（既存効果の代用にしない。仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 攻撃魔法 | 原初の崩壊 | 新規案 | `demon_chaos_spell_legendary` | spell | （効果なし） | chaos | — | **false** | 仕様の追加効果（状態異常の転換と追加ダメージ）を起こすしくみがまだなく、ダメージと属性だけで出すと追加効果がなく同レアの火の魔法より弱いだけになるため false（既存効果の代用にしない。仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 毒魔法 | 毒の霧 | 既存 | `poisonMist` | spell | poisonEnemy amount 1 | 闇・毒 | venom | true | 既存カード（効果・数値・IDは今のまま） |
+| 魔族軍 | 毒魔法 | 猛毒 | 既存 | `venom` | spell | poisonEnemy amount 2 | 闇・毒 | toxicRain | true | 既存カード（効果・数値・IDは今のまま） |
+| 魔族軍 | 毒魔法 | 毒の雨 | 既存 | `toxicRain` | spell | poisonEnemy amount 3 | 闇・毒 | deathMist | true | 既存カード（効果・数値・IDは今のまま） |
+| 魔族軍 | 毒魔法 | 死の霧 | 既存 | `deathMist` | spell | poisonEnemy amount 4 | 闇・毒 | plague | true | 既存カード（効果・数値・IDは今のまま） |
+| 魔族軍 | 毒魔法 | 疫病 | 既存 | `plague` | spell | poisonEnemy amount 5 | 闇・毒 | — | true | 既存カード（効果・数値・IDは今のまま） |
+| 魔族軍 | 呪い魔法 | 呪いの印 | 新規案 | `demon_curse_common` | spell | （効果なし） | dark | demon_curse_uncommon | **false** | 呪い（攻撃力低下・回復力低下・進軍妨害・継続弱体）の状態がまだない。呪い重複上限と持続も未決定。毒や凍結で代用すると別の効果になるため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 呪い魔法 | 衰弱 | 新規案 | `demon_curse_uncommon` | spell | （効果なし） | dark | demon_curse_rare | **false** | 呪い（攻撃力低下・回復力低下・進軍妨害・継続弱体）の状態がまだない。呪い重複上限と持続も未決定。毒や凍結で代用すると別の効果になるため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 呪い魔法 | 呪縛 | 新規案 | `demon_curse_rare` | spell | （効果なし） | dark | demon_curse_epic | **false** | 呪い（攻撃力低下・回復力低下・進軍妨害・継続弱体）の状態がまだない。呪い重複上限と持続も未決定。毒や凍結で代用すると別の効果になるため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 呪い魔法 | 死の宣告 | 新規案 | `demon_curse_epic` | spell | （効果なし） | dark | demon_curse_legendary | **false** | 呪い（攻撃力低下・回復力低下・進軍妨害・継続弱体）の状態がまだない。呪い重複上限と持続も未決定。毒や凍結で代用すると別の効果になるため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 呪い魔法 | 永劫の呪い | 新規案 | `demon_curse_legendary` | spell | （効果なし） | dark | — | **false** | 呪い（攻撃力低下・回復力低下・進軍妨害・継続弱体）の状態がまだない。呪い重複上限と持続も未決定。毒や凍結で代用すると別の効果になるため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 生命吸収 | 魂の欠片 | 新規案 | `demon_drain_common` | spell | drainCastle amount 3 | dark | demon_drain_uncommon | true | 既存の drainCastle（相手の城に 3 ダメージ。城HPを実際に減らしたぶんだけ自分の城を回復。城壁が受けたぶんは回復しない）が仕様どおり。基準ダメージ 3 は仕様書の値（命の簒奪＝レアの 8 と同じ系統） |
+| 魔族軍 | 生命吸収 | 生命吸収 | 新規案 | `demon_drain_uncommon` | spell | drainCastle amount 5 | dark | lifeSteal | true | 既存の drainCastle（相手の城に 5 ダメージ。城HPを実際に減らしたぶんだけ自分の城を回復。城壁が受けたぶんは回復しない）が仕様どおり。基準ダメージ 5 は仕様書の値（命の簒奪＝レアの 8 と同じ系統） |
+| 魔族軍 | 生命吸収 | 命の簒奪 | 既存 | `lifeSteal` | spell | drainCastle amount 8 | 闇 | demon_drain_epic | true | 既存カード（効果・数値・IDは今のまま）。台帳の合成先は魂喰らい（同じ魔族）。人間の決定で付けかえた |
+| 魔族軍 | 生命吸収 | 魂喰らい | 新規案 | `demon_drain_epic` | spell | drainCastle amount 12 | dark | demon_drain_legendary | true | 既存の drainCastle（相手の城に 12 ダメージ。城HPを実際に減らしたぶんだけ自分の城を回復。城壁が受けたぶんは回復しない）が仕様どおり。基準ダメージ 12 は仕様書の値（命の簒奪＝レアの 8 と同じ系統） |
+| 魔族軍 | 生命吸収 | 冥府の収穫 | 新規案 | `demon_drain_legendary` | spell | drainCastle amount 18 | dark | — | true | 既存の drainCastle（相手の城に 18 ダメージ。城HPを実際に減らしたぶんだけ自分の城を回復。城壁が受けたぶんは回復しない）が仕様どおり。基準ダメージ 18 は仕様書の値（命の簒奪＝レアの 8 と同じ系統） |
+| 魔族軍 | 死者蘇生 | 残響の魂 | 新規案 | `demon_revive_common` | spell | （効果なし） | dark | demon_revive_uncommon | **false** | その試合で倒れた自軍兵士の履歴（墓地・死亡履歴）がなく、倒れた兵士を戻すしくみがない。復活ターンの攻撃禁止・同じ兵士の無限蘇生の禁止も要る。代用できる既存効果はないため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 死者蘇生 | 亡者の呼び声 | 新規案 | `demon_revive_uncommon` | spell | （効果なし） | dark | demon_revive_rare | **false** | その試合で倒れた自軍兵士の履歴（墓地・死亡履歴）がなく、倒れた兵士を戻すしくみがない。復活ターンの攻撃禁止・同じ兵士の無限蘇生の禁止も要る。代用できる既存効果はないため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 死者蘇生 | 死者の帰還 | 新規案 | `demon_revive_rare` | spell | （効果なし） | dark | demon_revive_epic | **false** | その試合で倒れた自軍兵士の履歴（墓地・死亡履歴）がなく、倒れた兵士を戻すしくみがない。復活ターンの攻撃禁止・同じ兵士の無限蘇生の禁止も要る。代用できる既存効果はないため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 死者蘇生 | 禁忌の蘇生 | 新規案 | `demon_revive_epic` | spell | （効果なし） | dark | demon_revive_legendary | **false** | その試合で倒れた自軍兵士の履歴（墓地・死亡履歴）がなく、倒れた兵士を戻すしくみがない。復活ターンの攻撃禁止・同じ兵士の無限蘇生の禁止も要る。代用できる既存効果はないため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 死者蘇生 | 冥界の門 | 新規案 | `demon_revive_legendary` | spell | （効果なし） | dark | — | **false** | その試合で倒れた自軍兵士の履歴（墓地・死亡履歴）がなく、倒れた兵士を戻すしくみがない。復活ターンの攻撃禁止・同じ兵士の無限蘇生の禁止も要る。代用できる既存効果はないため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 城防御 | 血の膜 | 新規案 | `demon_wall_common` | defense | （効果なし） | 闇 | demon_wall_uncommon | **false** | 仕様「自城HPを代償に高効率の防御」の、城HPを払って城壁を置くしくみがない。代償も防御値も仕様が「後で決める」としている。城壁だけで出すと王国・森の城壁と同じ効果の複製になる（代償が個性）ため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 城防御 | 血の障壁 | 新規案 | `demon_wall_uncommon` | defense | （効果なし） | 闇 | demon_wall_rare | **false** | 仕様「自城HPを代償に高効率の防御」の、城HPを払って城壁を置くしくみがない。代償も防御値も仕様が「後で決める」としている。城壁だけで出すと王国・森の城壁と同じ効果の複製になる（代償が個性）ため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 城防御 | 深紅の結界 | 新規案 | `demon_wall_rare` | defense | （効果なし） | 闇 | demon_wall_epic | **false** | 仕様「自城HPを代償に高効率の防御」の、城HPを払って城壁を置くしくみがない。代償も防御値も仕様が「後で決める」としている。城壁だけで出すと王国・森の城壁と同じ効果の複製になる（代償が個性）ため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 城防御 | 魔界の防壁 | 新規案 | `demon_wall_epic` | defense | （効果なし） | 闇 | demon_wall_legendary | **false** | 仕様「自城HPを代償に高効率の防御」の、城HPを払って城壁を置くしくみがない。代償も防御値も仕様が「後で決める」としている。城壁だけで出すと王国・森の城壁と同じ効果の複製になる（代償が個性）ため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 城防御 | 冥王の障壁 | 新規案 | `demon_wall_legendary` | defense | （効果なし） | 闇 | — | **false** | 仕様「自城HPを代償に高効率の防御」の、城HPを払って城壁を置くしくみがない。代償も防御値も仕様が「後で決める」としている。城壁だけで出すと王国・森の城壁と同じ効果の複製になる（代償が個性）ため false（仕様 PR-B）。PR-C で作る |
+| 魔族軍 | 兵士防御 | 骨の盾 | 新規案 | `demon_armor_common` | defense | （効果なし） | 闇 | demon_armor_uncommon | **false** | 仕様の防御値と代償が未決定（「代償と防御値は後で決める」）で、盾だけで出すと王国の盾・森の植物防具と同じ効果の複製になるため false。PR-C で作る |
+| 魔族軍 | 兵士防御 | 亡者の鎧 | 新規案 | `demon_armor_uncommon` | defense | （効果なし） | 闇 | demon_armor_rare | **false** | 仕様の防御値と代償が未決定（「代償と防御値は後で決める」）で、盾だけで出すと王国の盾・森の植物防具と同じ効果の複製になるため false。PR-C で作る |
+| 魔族軍 | 兵士防御 | 呪骨の鎧 | 新規案 | `demon_armor_rare` | defense | （効果なし） | 闇 | demon_armor_epic | **false** | 仕様の防御値と代償が未決定（「代償と防御値は後で決める」）で、盾だけで出すと王国の盾・森の植物防具と同じ効果の複製になるため false。レア以上は「攻撃者に呪いを付与」（呪い状態がまだない）。PR-C で作る |
+| 魔族軍 | 兵士防御 | 死霊の甲冑 | 新規案 | `demon_armor_epic` | defense | （効果なし） | 闇 | demon_armor_legendary | **false** | 仕様の防御値と代償が未決定（「代償と防御値は後で決める」）で、盾だけで出すと王国の盾・森の植物防具と同じ効果の複製になるため false。レア以上は「攻撃者に呪いを付与」（呪い状態がまだない）。PR-C で作る |
+| 魔族軍 | 兵士防御 | 不滅の鎧 | 新規案 | `demon_armor_legendary` | defense | （効果なし） | 闇 | — | **false** | 仕様の防御値と代償が未決定（「代償と防御値は後で決める」）で、盾だけで出すと王国の盾・森の植物防具と同じ効果の複製になるため false。レア以上は「攻撃者に呪いを付与」（呪い状態がまだない）。PR-C で作る |
+| 魔族軍 | 魔力操作 | 魔力強奪 | 既存 | `manaRaid` | spell | drainMp amount 4 | 闇 | （合成しない） | true | 既存カード（効果・数値・IDは今のまま） |
 | 全陣営共通 | MP回復 | 魔力のかけら | 既存 | `manaShard` | spell | gainMp amount 1 | 無 | manaDrop | true | 既存カード（効果・数値・IDは今のまま） |
 | 全陣営共通 | MP回復 | 魔力のしずく | 既存 | `manaDrop` | spell | gainMp amount 2 | 無 | manaCrystal | true | 既存カード（効果・数値・IDは今のまま） |
 | 全陣営共通 | MP回復 | 魔力の水晶 | 既存 | `manaCrystal` | spell | gainMp amount 5 | 無 | manaSpring | true | 既存カード（効果・数値・IDは今のまま） |

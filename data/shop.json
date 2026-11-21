@@ -2672,6 +2672,519 @@
       "world": "kingdom",
       "desc": "世界樹の息吹を使うときの光が「若葉」の色に。この魔法だけに効く。",
       "filter": "hue-rotate(85deg) saturate(1.4)"
+    },
+    "skin_demon_undead_common": {
+      "slot": "charSkin",
+      "target": "demon_undead_common",
+      "targetName": "骸骨兵",
+      "name": "骸骨兵・紫紺",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "骸骨兵の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_undead_uncommon": {
+      "slot": "charSkin",
+      "target": "demon_undead_uncommon",
+      "targetName": "亡者騎士",
+      "name": "亡者騎士・紫紺",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "亡者騎士の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_undead_rare": {
+      "slot": "charSkin",
+      "target": "demon_undead_rare",
+      "targetName": "黒騎士",
+      "name": "黒騎士・紫紺",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "黒騎士の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_undead_epic": {
+      "slot": "charSkin",
+      "target": "demon_undead_epic",
+      "targetName": "デスナイト",
+      "name": "デスナイト・紫紺",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "デスナイトの見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_undead_legendary": {
+      "slot": "charSkin",
+      "target": "demon_undead_legendary",
+      "targetName": "不死王",
+      "name": "不死王・紫紺",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "不死王の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_warrior_common": {
+      "slot": "charSkin",
+      "target": "demon_warrior_common",
+      "targetName": "小悪魔",
+      "name": "小悪魔・紫紺",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "小悪魔の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_warrior_uncommon": {
+      "slot": "charSkin",
+      "target": "demon_warrior_uncommon",
+      "targetName": "魔族戦士",
+      "name": "魔族戦士・紫紺",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "魔族戦士の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_warrior_rare": {
+      "slot": "charSkin",
+      "target": "demon_warrior_rare",
+      "targetName": "魔界騎士",
+      "name": "魔界騎士・紫紺",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "魔界騎士の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_warrior_epic": {
+      "slot": "charSkin",
+      "target": "demon_warrior_epic",
+      "targetName": "アビスロード",
+      "name": "アビスロード・紫紺",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "アビスロードの見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_warrior_legendary": {
+      "slot": "charSkin",
+      "target": "demon_warrior_legendary",
+      "targetName": "魔神の将軍",
+      "name": "魔神の将軍・紫紺",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "魔神の将軍の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_caster_common": {
+      "slot": "charSkin",
+      "target": "demon_caster_common",
+      "targetName": "見習い呪術師",
+      "name": "見習い呪術師・紫紺",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "見習い呪術師の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_caster_uncommon": {
+      "slot": "charSkin",
+      "target": "demon_caster_uncommon",
+      "targetName": "呪術師",
+      "name": "呪術師・紫紺",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "呪術師の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_caster_rare": {
+      "slot": "charSkin",
+      "target": "demon_caster_rare",
+      "targetName": "ウォーロック",
+      "name": "ウォーロック・紫紺",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ウォーロックの見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_caster_epic": {
+      "slot": "charSkin",
+      "target": "demon_caster_epic",
+      "targetName": "ネクロマンサー",
+      "name": "ネクロマンサー・紫紺",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ネクロマンサーの見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "skin_demon_caster_legendary": {
+      "slot": "charSkin",
+      "target": "demon_caster_legendary",
+      "targetName": "冥府の大賢者",
+      "name": "冥府の大賢者・紫紺",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "冥府の大賢者の見た目が「紫紺」の色に。このキャラだけに効く。",
+      "filters": {
+        "blue": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #4da3e8) drop-shadow(0 0 1px #4da3e8)",
+        "orange": "grayscale(1) sepia(1) hue-rotate(250deg) saturate(2.6) brightness(.95) drop-shadow(0 0 2px #f5923e) drop-shadow(0 0 1px #f5923e)"
+      }
+    },
+    "fxskin_demon_dark_spell_common": {
+      "slot": "spellSkin",
+      "target": "demon_dark_spell_common",
+      "targetName": "シャドウ",
+      "name": "シャドウ・紫紺",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "シャドウを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_dark_spell_uncommon": {
+      "slot": "spellSkin",
+      "target": "demon_dark_spell_uncommon",
+      "targetName": "ダークボルト",
+      "name": "ダークボルト・紫紺",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ダークボルトを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_dark_spell_rare": {
+      "slot": "spellSkin",
+      "target": "demon_dark_spell_rare",
+      "targetName": "ナイトメア",
+      "name": "ナイトメア・紫紺",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ナイトメアを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_dark_spell_epic": {
+      "slot": "spellSkin",
+      "target": "demon_dark_spell_epic",
+      "targetName": "アビスバースト",
+      "name": "アビスバースト・紫紺",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "アビスバーストを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_dark_spell_legendary": {
+      "slot": "spellSkin",
+      "target": "demon_dark_spell_legendary",
+      "targetName": "エクリプス",
+      "name": "エクリプス・紫紺",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "エクリプスを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_chaos_spell_common": {
+      "slot": "spellSkin",
+      "target": "demon_chaos_spell_common",
+      "targetName": "カオスパルス",
+      "name": "カオスパルス・紫紺",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "カオスパルスを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_chaos_spell_uncommon": {
+      "slot": "spellSkin",
+      "target": "demon_chaos_spell_uncommon",
+      "targetName": "カオススフィア",
+      "name": "カオススフィア・紫紺",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "カオススフィアを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_chaos_spell_rare": {
+      "slot": "spellSkin",
+      "target": "demon_chaos_spell_rare",
+      "targetName": "ディストーション",
+      "name": "ディストーション・紫紺",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "ディストーションを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_chaos_spell_epic": {
+      "slot": "spellSkin",
+      "target": "demon_chaos_spell_epic",
+      "targetName": "カオスストーム",
+      "name": "カオスストーム・紫紺",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "カオスストームを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_chaos_spell_legendary": {
+      "slot": "spellSkin",
+      "target": "demon_chaos_spell_legendary",
+      "targetName": "原初の崩壊",
+      "name": "原初の崩壊・紫紺",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "原初の崩壊を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_curse_common": {
+      "slot": "spellSkin",
+      "target": "demon_curse_common",
+      "targetName": "呪いの印",
+      "name": "呪いの印・紫紺",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "呪いの印を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_curse_uncommon": {
+      "slot": "spellSkin",
+      "target": "demon_curse_uncommon",
+      "targetName": "衰弱",
+      "name": "衰弱・紫紺",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "衰弱を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_curse_rare": {
+      "slot": "spellSkin",
+      "target": "demon_curse_rare",
+      "targetName": "呪縛",
+      "name": "呪縛・紫紺",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "呪縛を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_curse_epic": {
+      "slot": "spellSkin",
+      "target": "demon_curse_epic",
+      "targetName": "死の宣告",
+      "name": "死の宣告・紫紺",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "死の宣告を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_curse_legendary": {
+      "slot": "spellSkin",
+      "target": "demon_curse_legendary",
+      "targetName": "永劫の呪い",
+      "name": "永劫の呪い・紫紺",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "永劫の呪いを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_drain_common": {
+      "slot": "spellSkin",
+      "target": "demon_drain_common",
+      "targetName": "魂の欠片",
+      "name": "魂の欠片・紫紺",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "魂の欠片を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_drain_uncommon": {
+      "slot": "spellSkin",
+      "target": "demon_drain_uncommon",
+      "targetName": "生命吸収",
+      "name": "生命吸収・紫紺",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "生命吸収を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_drain_epic": {
+      "slot": "spellSkin",
+      "target": "demon_drain_epic",
+      "targetName": "魂喰らい",
+      "name": "魂喰らい・紫紺",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "魂喰らいを使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_drain_legendary": {
+      "slot": "spellSkin",
+      "target": "demon_drain_legendary",
+      "targetName": "冥府の収穫",
+      "name": "冥府の収穫・紫紺",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "冥府の収穫を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_revive_common": {
+      "slot": "spellSkin",
+      "target": "demon_revive_common",
+      "targetName": "残響の魂",
+      "name": "残響の魂・紫紺",
+      "rarity": "common",
+      "price": 300,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "残響の魂を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_revive_uncommon": {
+      "slot": "spellSkin",
+      "target": "demon_revive_uncommon",
+      "targetName": "亡者の呼び声",
+      "name": "亡者の呼び声・紫紺",
+      "rarity": "uncommon",
+      "price": 600,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "亡者の呼び声を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_revive_rare": {
+      "slot": "spellSkin",
+      "target": "demon_revive_rare",
+      "targetName": "死者の帰還",
+      "name": "死者の帰還・紫紺",
+      "rarity": "rare",
+      "price": 1200,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "死者の帰還を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_revive_epic": {
+      "slot": "spellSkin",
+      "target": "demon_revive_epic",
+      "targetName": "禁忌の蘇生",
+      "name": "禁忌の蘇生・紫紺",
+      "rarity": "epic",
+      "price": 2400,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "禁忌の蘇生を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
+    },
+    "fxskin_demon_revive_legendary": {
+      "slot": "spellSkin",
+      "target": "demon_revive_legendary",
+      "targetName": "冥界の門",
+      "name": "冥界の門・紫紺",
+      "rarity": "legendary",
+      "price": 4800,
+      "gacha": false,
+      "world": "kingdom",
+      "desc": "冥界の門を使うときの光が「紫紺」の色に。この魔法だけに効く。",
+      "filter": "hue-rotate(250deg) brightness(0.8)"
     }
   }
 }

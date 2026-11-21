@@ -17,24 +17,24 @@ function pass(g) {
   }
 }
 
-test('cards.json：4枚はレアで、合成しない（fuseTo: null）。MP はレアのコスト（3）', () => {
+test('cards.json：4枚はレア。魔力強奪・決死の砲撃・火薬庫は合成しない（fuseTo: null）。命の簒奪だけは人間の決定で魂喰らいに合成できる。MP はレアのコスト（3）', () => {
   const c = loadJson('cards.json');
   const expect = { manaRaid: ['drainMp', 4], lifeSteal: ['drainCastle', 8], desperateShot: ['sacrificeAttack', 20], powderKeg: ['damageAllSoldiers', 8] };
   for (const [type, [effect, amount]] of Object.entries(expect)) {
     assert.equal(c[type].effect, effect, type);
     assert.equal(c[type].amount, amount, type);
     assert.equal(c[type].rarity, 'rare', type);
-    assert.equal(c[type].fuseTo, null, type);
+    assert.equal(c[type].fuseTo, type === 'lifeSteal' ? 'demon_drain_epic' : null, type);
     assert.equal(c[type].mpCost, undefined, type);
   }
   assert.equal(c.desperateShot.selfDamage, 6);
 });
 
-test('合成しないカード（fuseTo: null）：同じカード2枚でも、適応とでも合成できない', () => {
+test('合成しないカード（fuseTo: null）：同じカード2枚でも、適応とでも合成できない（魔力強奪で確かめる）', () => {
   const g = make({ initialMp: 10, maxMp: 20 });
-  g.debugSetHand('p1', ['lifeSteal', 'lifeSteal', 'adapt']);
+  g.debugSetHand('p1', ['manaRaid', 'manaRaid', 'adapt']);
   g.start();
-  const ids = g.getState('p1').players.p1.hand.filter((x) => x.type === 'lifeSteal').map((x) => x.cardId);
+  const ids = g.getState('p1').players.p1.hand.filter((x) => x.type === 'manaRaid').map((x) => x.cardId);
   assert.equal(g.canFuse(ids[0], ids[1]).reason, 'このカードは合成できません');
   assert.equal(g.canFuse(idOf(g, 'p1', 'adapt'), ids[0]).reason, 'このカードは合成できません');
 });

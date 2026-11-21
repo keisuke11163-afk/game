@@ -85,11 +85,13 @@ test('既存の13枚（精霊召喚12・ゲイルフォース）は台帳と名�
 });
 
 test('取り込み前の176枚（B1 まで）は1文字も変わっていない（B2 は末尾に足しただけ）', () => {
-  const before = Object.fromEntries(Object.entries(CARDS).filter(([id]) => !B2_NEW.includes(id)));
+  const before = Object.fromEntries(Object.entries(CARDS).filter(([id]) => !B2_NEW.includes(id) && !/^demon_/.test(id)).map(([id, d]) => [id, { ...d }])); // B3 の新規（demon_*）も除く
+  assert.equal(before.lifeSteal.fuseTo, 'demon_drain_epic'); // 人間の決定（B3）で魂喰らいへ付けかえた。それ以前は null
+  before.lifeSteal.fuseTo = null;
   assert.equal(Object.keys(before).length, 176);
   const hash = createHash('sha256').update(JSON.stringify(before)).digest('hex');
   assert.equal(hash, 'd6851743d79c9afbe41d04ffc4819ae95f5935d578dc741b464090abdb7079f9');
-  assert.equal(Object.keys(CARDS).length, 226);
+  assert.equal(Object.keys(CARDS).length, 290); // B3 で 64 枚増えた（B2 の時点は 226）
 });
 
 test('ID・名前の衝突がない。新しいIDは chain_id_rarity。生成スクリプトは冪等', () => {
@@ -103,8 +105,8 @@ test('ID・名前の衝突がない。新しいIDは chain_id_rarity。生成ス
   assert.equal(`${JSON.stringify(out.shop, null, 2)}\n`, shopText);
   assert.equal(out.storiesJs, readFileSync(join(ROOT, 'js', 'ui', 'stories-factions.js'), 'utf8'));
   assert.equal(out.table, readFileSync(join(ROOT, 'docs', 'four-factions', 'import', 'table.md'), 'utf8'));
-  assert.equal(out.newIds.length, 90);
-  assert.equal(out.newIds.filter((id) => out.cards[id].implemented === false).length, 38);
+  assert.equal(out.newIds.length, 154); // B1〜B3 の合計（B2 の時点は 90。B3 で +64）
+  assert.equal(out.newIds.filter((id) => out.cards[id].implemented === false).length, 78); // 同じく（B2 の時点は 38。B3 で +40）
   // 衝突したら止まる
   const clash = JSON.parse(cardsText);
   delete clash.forest_fire_magic_common;

@@ -57,7 +57,7 @@ test('B1 の範囲は 王国59＋共通7＋森の武器20＝86行。すべてが
   assert.deepEqual(byFaction, { kingdom: 24, forest: 16 });
 });
 
-test('既存の136枚（取り込み前の全カード）は、人間が決めた改名4件と合成先5件のほかは1文字も変わっていない', () => {
+test('既存の136枚（取り込み前の全カード）は、人間が決めた改名4件と合成先6件（聖騎士・命の簒奪を含む）のほかは1文字も変わっていない', () => {
   const before = Object.fromEntries(Object.entries(CARDS).filter(([, d]) => !d.factionOnly).map(([id, d]) => [id, { ...d }]));
   assert.equal(Object.keys(before).length, 136);
   // 人間が決めた変更を戻すと、取り込み前（PR-A のあと）と同じになる
@@ -74,6 +74,9 @@ test('既存の136枚（取り込み前の全カード）は、人間が決め�
   }
   assert.equal(before.paladin.fuseTo, 'king_cavalry_legendary');
   before.paladin.fuseTo = null;
+  // 命の簒奪の合成先は人間の決定（B3）で、台帳どおり魂喰らいに付けかえた（それ以前は null）
+  assert.equal(before.lifeSteal.fuseTo, 'demon_drain_epic');
+  before.lifeSteal.fuseTo = null;
   const hash = createHash('sha256').update(JSON.stringify(before)).digest('hex');
   assert.equal(hash, 'a37dd30f0626b7a9dc72de2581beb04880f2c6ed31621a2975c2119a60ecfa71');
 });
